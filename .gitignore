@@ -1,0 +1,4 @@
+.DS_Store
+*.csv
+*.pyc
+env_*
