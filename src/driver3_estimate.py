@@ -14,34 +14,29 @@ from util import *
   * MixedLogit - probablistic combination of k of the aforementioned modes
 
   input : env.data_path/choices/
-  output: env.data_path/fits_param/
-          env.data_path/fits_util/
+  output: env.data_path/fits/
 
 """
 
 # make sure all the output folders are there
-for folder in ['fits_utility', 'fits_param']:
-    mkdir('%s/%s' % (data_path, folder))
+mkdir('%s/fits' % data_path)
 
 
 def do_one_degree(graph):
     m = DegreeLogitModel(graph, vvv=2)
     m.fit()
-    m.write_degree_utilities()
     m.write_params()
 
 
 def do_one_log(graph):
     m = LogLogitModel(graph, vvv=2)
     m.fit()
-    m.write_degree_utilities()
     m.write_params()
 
 
 def do_one_poly(graph):
     m = PolyLogitModel(graph, vvv=2)
     m.fit()
-    m.write_degree_utilities()
     m.write_params()
 
 
@@ -51,7 +46,6 @@ def do_one_mixed_logit(graph):
     m.add_log_model(bounds=((1, 1),))
     m.add_poly_model(k=1, bounds=((1, 1),))  # uniform
     m.fit(n_rounds=250, etol=10)
-    m.write_degree_utilities()
     m.write_params()
 
 
@@ -59,7 +53,7 @@ if __name__ == '__main__':
 
     # individual in parallel
     graphs = os.listdir(data_path + "/choices")  # todo
-    fits = os.listdir(data_path + "/fits_param/logit_degree")  # already done
+    fits = os.listdir(data_path + "/fits/logit_degree")  # already done
     graphs = [x for x in graphs if x not in fits]
     # graphs  = [x for x in graphs if 'g' in x]
     print("TODO: %d" % len(graphs))

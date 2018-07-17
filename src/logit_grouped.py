@@ -101,75 +101,29 @@ class LogitModel:
         # store the resulting parameters
         self.u = res.x
 
-    def write_degree_utilities(self):
-        """
-        Write out the estimated utilities of every degree from 1:max_degree.
-        """
-        if self.id is None:
-            self.exception("can't write model, as filename not specified.")
-        if '.' not in self.id:
-            self.exception("model id is not a filename.")
-        # make sure the output folder exists
-        folder = '%s/fits_utility/%s' % (data_path, self.model_type)
-        mkdir(folder)
-        # construct the output file handle
-        f = open('%s/%s' % (folder, self.id), 'w')
-        writer = csv.writer(f)
-        # write the header
-        if self.se[0] is not None:
-            # write out confidence intervals if SE is specified
-            header = ['deg', 'u', 'll', 'ul', 'u_exp', 'll_exp', 'ul_exp']
-        else:
-            header = ['deg', 'u', 'u_exp']
-        writer.writerow(header)
-        # write each degree as a row
-        for d in range(self.d):
-            if self.se[0] is not None:
-                row = [d,
-                       self.predict(d),
-                       self.predict(d) - 1.96 * self.se[d],
-                       self.predict(d) + 1.96 * self.se[d],
-                       np.exp(self.predict(d)),
-                       np.exp(self.predict(d) - 1.96 * self.se[d]),
-                       np.exp(self.predict(d) + 1.96 * self.se[d])]
-            else:
-                row = [d,
-                       self.predict(d),
-                       np.exp(self.predict(d))]
-            writer.writerow(row)
-        # close the file
-        f.close()
-        if self.vvv:
-            self.message("wrote model to file")
-
     def write_params(self):
         """
         Write out the estimated parameters.
+        Colums are: ['id', 'mode', 'p(k)', 'parameter', 'value', 'se']
         """
         if self.id is None:
             self.exception("can't write model, as filename not specified.")
         if '.' not in self.id:
             self.exception("model id is not a filename.")
         # make sure the output folder exists
-        folder = '%s/fits_param/%s' % (data_path, self.model_type)
+        folder = '%s/fits/%s' % (data_path, self.model_type)
         mkdir(folder)
-        # construct the output file handle
-        f = open('%s/%s' % (folder, self.id), 'w')
-        writer = csv.writer(f)
-        # write the header
-        header = ['id', 'mode', 'pk', 'param', 'value', 'se']
-        writer.writerow(header)
-        # write each degree as a row
-        for i in range(len(self.u)):
-            row = [self.id,
-                   self.model_type,
-                   1,
-                   i,
-                   self.u[i],
-                   self.se[i]]
-            writer.writerow(row)
-        # close the file
-        f.close()
+        with open('%s/%s' % (folder, self.id), 'w') as f:
+            writer = csv.writer(f)
+            # write each degree as a row
+            for i in range(len(self.u)):
+                row = [self.id,
+                       self.model_type,
+                       1,
+                       i,
+                       self.u[i],
+                       self.se[i]]
+                writer.writerow(row)
         if self.vvv:
             self.message("wrote model to file")
 
@@ -463,70 +417,35 @@ class MixedLogitModel(LogitModel):
             # store new ll
             prev_ll = ll
 
-    def write_degree_utilities(self):
-        """
-        Write out a fitted mixed model.
-        """
-        if self.id is None:
-            self.exception("can't write model, as filename not specified.")
-        if '.' not in self.id:
-            self.exception("model id is not a filename.")
-        # make sure the output folder exists
-        folder = '%s/fits_utility/%s' % (data_path, self.model_type)
-        mkdir(folder)
-        # construct the output file handle
-        f = open('%s/%s' % (folder, self.id), 'w')
-        writer = csv.writer(f)
-        # write the header
-        writer.writerow(['model', 'pk', 'deg', 'u', 'u_exp'])
-        # write each model
-        for k in range(len(self.models)):
-            # write each degree to compare across models
-            for d in range(self.models[k].d):
-                row = [self.models[k].model_type,
-                       "%.3f" % self.pk[k],
-                       d + 1,
-                       self.models[k].predict(d),
-                       np.exp(self.models[k].predict(d))]
-                writer.writerow(row)
-        # close the file
-        f.close()
-        if self.vvv:
-            self.message("wrote model to file")
-
     def write_params(self):
         """
         Write out the estimated parameters.
+        Colums are: ['id', 'mode', 'p(k)', 'parameter', 'value', 'se']
         """
         if self.id is None:
             self.exception("can't write model, as filename not specified.")
         if '.' not in self.id:
             self.exception("model id is not a filename.")
         # make sure the output folder exists
-        folder = '%s/fits_param/%s' % (data_path, self.model_type)
+        folder = '%s/fits/%s' % (data_path, self.model_type)
         mkdir(folder)
         # construct the output file handle
         fn = self.make_fn()
-        f = open('%s/%s' % (folder, fn), 'w')
-        writer = csv.writer(f)
-        # write the header
-        header = ['id', 'mode', 'pk', 'param', 'value', 'se']
-        writer.writerow(header)
-        # write each model
-        for k in range(len(self.models)):
-            # grab model
-            m = self.models[k]
-            # write each degree as a row
-            for i in range(len(m.u)):
-                row = [fn,
-                       m.model_type,
-                       "%.3f" % self.pk[k],
-                       i,
-                       m.u[i],
-                       m.se[i]]
-                writer.writerow(row)
-        # close the file
-        f.close()
+        with open('%s/%s' % (folder, fn), 'w') as f:
+            writer = csv.writer(f)
+            # write each model
+            for k in range(len(self.models)):
+                # grab model
+                m = self.models[k]
+                # write each degree as a row
+                for i in range(len(m.u)):
+                    row = [fn,
+                           m.model_type,
+                           "%.3f" % self.pk[k],
+                           i,
+                           m.u[i],
+                           m.se[i]]
+                    writer.writerow(row)
         if self.vvv:
             self.message("wrote model to file")
 
