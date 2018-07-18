@@ -7,6 +7,7 @@ from util import *
   represented as (choice_id, Y, degree, n_fofs).
 
   TODO - this whole script is a WIP draft
+  TODO - how to incorporate / implement FOF modes?
 
 """
 
@@ -17,7 +18,7 @@ class LogitModel:
     """
     def __init__(self, model_id, D=None, max_deg=None, vvv=0):
         """
-        Constructor for a LogitModel object. The data (the N anc C matrices)
+        Constructor for a LogitModel object. The data (the D matrix)
         can be provided directly, or will be read in from file.
 
         * model_id can be either the file name from where the choices are read,
@@ -97,7 +98,7 @@ class LogitModel:
 
     def write_params(self):
         """
-        Write out the estimated parameters.
+        Write out the estimated parameters as csv.
         Colums are: ['id', 'mode', 'p(k)', 'parameter', 'value', 'se']
         """
         if self.id is None:
@@ -148,9 +149,17 @@ class DegreeLogitModel(LogitModel):
         self.se = [None] * (max_deg + 1)  # current SE values
 
     def individual_likelihood(self, u):
+        """
+        Computes the likelihood for every data point (choice).
+
+        L_i(u) = exp(beta_{deg_i}) / sum_j exp(beta_{deg_j})
+
+        TODO - very slow right now, need to profile
+        """
         # compute exponentiated utilities
         E = np.array([np.exp(u)] * self.D.shape[0])
-        D = self.D
+        # copy for manipulation
+        D = deepcopy(self.D)
         # assign utilities to all cases
         D['score'] = E[range(E.shape[0]), D.deg]
         # compute total utility per case
@@ -161,28 +170,41 @@ class DegreeLogitModel(LogitModel):
         return D.score / D.score_tot
 
     def grad(self, u=None, w=None):
+        """
+        Gradient function.
+
+        TODO - write out formula
+        TODO - integrate weights
+        TODO - slight discrepancy with LL:
+
+            >>> from logit_individual import *
+            >>> from scipy.optimize import check_grad
+            >>> m = DegreeLogitModel('d-0.75-0.50-00.csv')
+            >>> check_grad(m.ll, m.grad, m.u)
+            0.5674555184675677
+        """
         if u is None:
             u = self.u
         # if no weights specified, default to 1
         if w is None:
             w = np.array([1] * self.n)
-        # make weights
-        w = np.array([w] * len(self.u)).T
         # compute exponentiated utilities
-
-        # TODO
-        E = np.array([np.exp(u)] * self.n)
         E = np.array([np.exp(u)] * self.D.shape[0])
+        # soft copy for manipulation (doesn't actually copy, but is shorter)
+        D = self.D
         # assign utilities to all cases
-        score = self.N * E
+        D['score'] = E[range(E.shape[0]), D.deg]
         # compute total utility per case
-        score_tot = np.sum(score, axis=1)  # row sum
+        D['score_tot'] = D.groupby('choice_id')['score'].transform(np.sum)
         # compute probabilities
-        prob = (score.T / score_tot).T
+        D['prob'] = D['score'] / D['score_tot']
         # adjust probabilities based on whether they were chosen
-        prob[range(self.n), self.C] = prob[range(self.n), self.C] - 1
-        # (col) sum over degrees to compute gradient
-        return np.sum(prob * w, axis=0)
+        D.loc[D.y == 1, 'prob'] -= 1
+        # TODO - integrate weight first
+        # sum over degrees to get gradient
+        scores = D.groupby('deg')['prob'].aggregate(np.sum)
+        # sum over examples (possibly with weights)
+        return scores  #np.sum(scores * w, axis=0)
 
     def predict(self, d):
         """
@@ -209,6 +231,12 @@ class PolyLogitModel(LogitModel):
         self.bounds = bounds  # bound the parameter
 
     def individual_likelihood(self, u):
+        """
+        Computes the likelihood for every data point (choice).
+
+        TODO - convert to individual data
+        TODO - write out formula
+        """
         # compute poly utilities
         E = np.array([poly_utilities(self.d, u)] * self.n)
         # assign utilities to all cases
@@ -222,6 +250,9 @@ class PolyLogitModel(LogitModel):
         """
         Gradient of the log logit model:
         grad(beta_k) = sum_i [ u_i^k - (sum_j exp(sum_k beta_k u_i^k) * u_i^k) / (sum_j exp(sum_k beta_k u_j^k) ]
+
+        TODO - convert to individual data
+        TODO - write out new formula
         """
         # if no parameters specified, use the parameters of the object itself
         if u is None:
@@ -270,6 +301,12 @@ class LogLogitModel(LogitModel):
         self.bounds = bounds  # bound the parameter
 
     def individual_likelihood(self, u):
+        """
+        Computes the likelihood for every data point (choice).
+
+        TODO - convert to individual data
+        TODO - write out formula
+        """
         # compute matrix of degrees
         E = np.array([range(self.d)] * self.n)
         # set deg 0 to 1 for now...
@@ -290,7 +327,9 @@ class LogLogitModel(LogitModel):
         """
         Gradient of the log logit model:
         grad(a) = sum_i [ log(u_i) - (sum_j u_j^a * log(u_j)) / sum_j u_j^a ]
-        TODO - for some values it doesn't work..
+
+        TODO - convert to individual data
+        TODO - write out new formula
         """
         # if no parameters specified, use the parameters of the object itself
         if u is None:
@@ -335,6 +374,8 @@ class MixedLogitModel(LogitModel):
     l  = log logit
     px = x-degree poly logit
     d  = degree logit
+
+    TODO - update this whole class
     """
     def __init__(self, model_id, N=None, C=None, max_deg=50, vvv=False):
         LogitModel.__init__(self, model_id, N, C, max_deg, vvv)

@@ -49,7 +49,7 @@ class LogitModel:
         """
         Generic log-likelihood function. It computes individual log-likelihood
         scores for each example using a model-specifc formula, and computes a
-        (weighted) sum.
+        (weighted) sum of the logs.
         """
         # if no parameters specified, use the parameters of the object itself
         if u is None:
@@ -154,6 +154,12 @@ class DegreeLogitModel(LogitModel):
         self.se = [None] * self.d  # current SE values
 
     def individual_likelihood(self, u):
+        """
+        Compute the likelihood for every data point (choice).
+        Since the data is grouped, we can sum over degrees (and multiply
+        by the number of nodes with that degree), rather than nodes.
+        L_i(u) = exp(beta_{deg_i}) / sum_{k=0}^{max_d} exp(beta_k) * n_k
+        """
         # compute exponentiated utilities
         E = np.array([np.exp(u)] * self.n)
         # assign utilities to all cases
@@ -161,9 +167,17 @@ class DegreeLogitModel(LogitModel):
         # compute total utility per case
         score_tot = np.sum(score, axis=1)  # row sum
         # compute probabilities of choices
+        # TODO - think should not multiply numerator by n, so should be:
+        #          return E[range(score.shape[0]), self.C] / score_tot
+        #        however, seems to work less well when checking with
+        #        scipy.optimize.check_grad()
         return score[range(score.shape[0]), self.C] / score_tot
 
     def grad(self, u=None, w=None):
+        """
+        Gradient function.
+        TODO - write out formula
+        """
         if u is None:
             u = self.u
         # if no weights specified, default to 1
@@ -209,6 +223,12 @@ class PolyLogitModel(LogitModel):
         self.bounds = bounds  # bound the parameter
 
     def individual_likelihood(self, u):
+        """
+        Compute the likelihood for every data point (choice),
+        under the polynomial logit model.
+
+        TODO - write out formula
+        """
         # compute poly utilities
         E = np.array([poly_utilities(self.d, u)] * self.n)
         # assign utilities to all cases
@@ -220,9 +240,9 @@ class PolyLogitModel(LogitModel):
 
     def grad_wip(self, u=None, w=None):
         """
-        Gradient of the log logit model:
-        grad(beta_k) = sum_i [ u_i^k - (sum_j exp(sum_k beta_k u_i^k) * u_i^k) / (sum_j exp(sum_k beta_k u_j^k) ]
-        TODO - this is a WIP
+        Gradient of the polynomial logit model.
+
+        TODO - write out formula
         """
         # if no parameters specified, use the parameters of the object itself
         if u is None:
@@ -256,9 +276,6 @@ class LogLogitModel(LogitModel):
     """
     This class represents a multinomial logit model, with a
     log transformation over degrees. The model has 1 parameter.
-    p(deg_i) = exp(u * log(deg_i)) * n_i / sum_j exp(u * log(deg_j)) n_j
-    p(x_i  ) = exp(u * log(deg_i))       / sum_j exp(u * log(deg_j))
-    TODO - which one?
     """
     def __init__(self, model_id, N=None, C=None, max_deg=50, vvv=False,
                  bounds=((0, 2), )):
@@ -271,6 +288,14 @@ class LogLogitModel(LogitModel):
         self.bounds = bounds  # bound the parameter
 
     def individual_likelihood(self, u):
+        """
+        Compute the likelihood for every data point (choice).
+
+        p(deg_i) = exp(u * log(deg_i)) * n_i / sum_j exp(u * log(deg_j)) n_j
+        p(x_i  ) = exp(u * log(deg_i))       / sum_j exp(u * log(deg_j))
+
+        TODO - pick which formula, make sure it's implemented correctly
+        """
         # compute matrix of degrees
         E = np.array([range(self.d)] * self.n)
         # set deg 0 to 1 for now...
@@ -291,7 +316,8 @@ class LogLogitModel(LogitModel):
         """
         Gradient of the log logit model:
         grad(a) = sum_i [ log(u_i) - (sum_j u_j^a * log(u_j)) / sum_j u_j^a ]
-        TODO - for some values it doesn't work..
+        TODO - for some values it doesn't work.. which? revist
+        TODO - write out formula
         """
         # if no parameters specified, use the parameters of the object itself
         if u is None:
