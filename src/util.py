@@ -20,6 +20,9 @@ from env import *
 
 """
 
+# amount to smooth log(0) with
+log_smooth = 1e-8
+
 
 # Helper functions
 

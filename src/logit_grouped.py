@@ -60,7 +60,7 @@ class LogitModel:
         # compute individual likelihood scores
         scores = self.individual_likelihood(u)
         # add tiny smoothing for deg=0 choices
-        scores += 0.00001
+        scores += log_smooth
         # return sum
         return -1 * sum(np.log(scores) * w)
 
@@ -247,7 +247,7 @@ class PolyLogitModel(LogitModel):
         TODO - 1000% discrepancy with ll(), but still fits correctly...:
 
             >>> from logit_grouped import *
-            >>> m1 = PolyLogitModel('d-0.75-0.50-00.csv')
+            >>> m1 = PolyLogitModel('d-0.75-0.50-00.csv', k=2)
             >>> check_grad_rel(m1.ll, m1.grad, m1.u)
             array([  0.        , -10.78738252])
 
@@ -309,7 +309,7 @@ class LogLogitModel(LogitModel):
 
         """
         # compute log utility per degree
-        score = np.exp(u * np.log(np.array([range(self.d)] * self.n) + 0.0001))
+        score = np.exp(u * np.log(np.array([range(self.d)] * self.n) + log_smooth))
         # compute total utility per case
         score_tot = np.sum(self.N * score, axis=1)  # row sum
         # compute probabilities of choices
@@ -331,7 +331,7 @@ class LogLogitModel(LogitModel):
         if w is None:
             w = np.array([1] * self.n)
         # make matrix of log degree
-        D = np.log(np.array([range(self.d)] * self.n) + 0.0001)
+        D = np.log(np.array([range(self.d)] * self.n) + log_smooth)
         # compute numerator : log degree * group n * log utility
         num = np.sum(D * self.N * np.exp(u * D), axis=1)  # row sum
         # compute denominator : group n * log utility
