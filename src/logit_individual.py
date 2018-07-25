@@ -6,9 +6,7 @@ from util import *
   multinomial logit models on *individual* data. The examples are
   represented as (choice_id, Y, degree, n_fofs).
 
-  TODO - check all individual() and grad() functions
-  TODO - weights is harder with sampled data, need to incorporate into mixed
-  TODO - how to incorporate / implement FOF modes?
+  TODO - incorporate / implement FOF modes
 
 """
 
@@ -43,9 +41,9 @@ class LogitModel:
 
     def ll(self, u=None, w=None):
         """
-        Generic log-likelihood function. It computes individual log-likelihood
+        Generic log-likelihood function. It computes individual likelihood
         scores for each example using a model-specifc formula, and computes a
-        (weighted) sum.
+        (weighted) sum of their logs.
         """
         # if no parameters specified, use the parameters of the object itself
         if u is None:
@@ -151,7 +149,8 @@ class DegreeLogitModel(LogitModel):
 
     def individual_likelihood(self, u):
         """
-        Computes the likelihood for every data point (choice).
+        Individual likelihood function of the degree logit model.
+        Computes the likelihood for every data point (choice) separately.
 
         L(theta, (x,C)) = exp(theta_{k_x}) / sum_{y in C} exp(theta_{k_y})
         """
@@ -164,7 +163,7 @@ class DegreeLogitModel(LogitModel):
 
     def grad(self, u=None, w=None):
         """
-        Gradient function.
+        Gradient function of the degree logit model.
 
         grad_d(theta, D) = sum_{(x,C) in D} [ 1{k_x = d} -
           (sum_{y in C} 1{k_y = d}*exp(theta_k_y)) /
@@ -208,12 +207,13 @@ class PolyLogitModel(LogitModel):
 
     def individual_likelihood(self, u):
         """
-        Computes the likelihood for every data point (choice).
+        Individual likelihood function of the polynomial logit model.
+        Computes the likelihood for every data point (choice) separately.
 
         L(theta, (x,C)) = exp(sum_d theta_d*k_x^d) /
                           sum_{y in C} exp(sum_d theta_d*k_y^d))
         
-        TODO - with k > 2, get underflow issues in exp (L221)
+        TODO - with k > 2, get underflow issues in exp (L219)
         """
         # raise degree to power
         powers = np.power(np.array([self.D.deg] * len(u)).T, np.arange(len(u)))
@@ -226,22 +226,21 @@ class PolyLogitModel(LogitModel):
 
     def grad(self, u=None, w=None):
         """
-        Gradient of the polynomial logit model:
+        Gradient function of the polynomial logit model.
 
-        grad(theta_d, D) = sum_{(x,C) in D} [ sum_d theta_d*k_x^d -
+        grad(theta_d, D) = sum_{(x,C) in D} [ k_x^d -
            (sum_{y in C} k_y^d*exp(sum_d theta_d*k_y^d)) /
            (sum_{y in C}       exp(sum_d theta_d*k_y^d))
         ]
 
-        TODO - discrepancy with ll(), but still fits correctly...:
+        TODO - 80% discrepancy with ll(), but still fits correctly...:
 
-            >>> from logit_individual import *
-            >>> from scipy.optimize import check_grad
-            >>> m = PolyLogitModel('d-0.75-0.50-00.csv')
-            >>> check_grad(m.ll, m.grad, m.u)
-            31799.4562
+            >>> from logit_grouped import *
+            >>> m1 = PolyLogitModel('d-0.75-0.50-00.csv')
+            >>> check_grad_rel(m1.ll, m1.grad, m1.u)
+            array([  0.        , -10.78738252])
 
-        TODO - with k > 2, get overflow issues in exp
+        TODO - with k > 2, get overflow issues in exp (L253)
         """
         # if no parameters specified, use the parameters of the object itself
         if u is None:
@@ -287,7 +286,8 @@ class LogLogitModel(LogitModel):
 
     def individual_likelihood(self, u):
         """
-        Computes the likelihood for every data point (choice).
+        Individual likelihood function of the log logit model.
+        Computes the likelihood for every data point (choice) separately.
 
         L(alpha, (x,C)) = exp(alpha * log(k_x)) / sum_{y in C} exp(alpha * log(k_y))
         """
@@ -300,20 +300,12 @@ class LogLogitModel(LogitModel):
 
     def grad(self, u=None, w=None):
         """
-        Gradient function.
+        Gradient function of log logit model.
 
         grad(alpha, D) = sum_{(x,C) in D} [ alpha*ln(k_x) -
           (sum_{y in C} ln(k_y)*exp(alpha*ln(k_y))) /
           (sum_{y in C}         exp(alpha*ln(k_y)))
         ]
-
-        TODO - discrepancy with ll(), but still fits correctly...:
-
-            >>> from logit_individual import *
-            >>> from scipy.optimize import check_grad
-            >>> m = LogLogitModel('d-0.75-0.50-00.csv')
-            >>> check_grad(m.ll, m.grad, m.u)
-            62.31390
         """
         # if no parameters specified, use the parameters of the object itself
         if u is None:
