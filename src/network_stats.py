@@ -418,7 +418,6 @@ def process_all_edges(graph, verbose=False):
 def compute_stats(G, p=0.1):
     """
     Wrapper function to compute statistics of a single graph.
-    TODO - add modularity and fiedler value.
     """
     res = {}
     res['n_nodes'] = len(G.nodes())
@@ -427,6 +426,9 @@ def compute_stats(G, p=0.1):
     res['assortivity'] = nx.degree_assortativity_coefficient(G)
     res['clustering'] = nx.average_clustering(G)
     res['degree_distribution_lambda'] = fit_exponential(G)
+    res['fiedler_value'] = nx.algebraic_connectivity(G)
+    # TODO - greedy_modularity_communities() might not be in this nx version
+    res['max_modularity'] = modularity(G, greedy_modularity_communities(G))
     res['jackson_r'] = fit_jackson_r(G)
     if nx.is_connected(G):
         res['avg_shortest_path'] = appr_average_shortest_path_length(G, p)
