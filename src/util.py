@@ -3,13 +3,13 @@ import networkx as nx
 import numpy as np
 import os
 import pandas as pd
+import scipy as sp
 import random
 
 from collections import Counter
 from copy import deepcopy
 from glob import glob
 from multiprocessing import Pool
-from scipy.optimize import minimize, approx_fprime
 
 from env import *
 
@@ -61,7 +61,7 @@ def check_grad_rel(func, grad, x0, *args):
     Uses scipy.optimize.approx_fprime
     """
     step = 1.49e-08
-    target = approx_fprime(x0, func, step, *args)
+    target = sp.optimize.approx_fprime(x0, func, step, *args)
     actual = grad(x0, *args)
     delta = target - actual
     # make sure target is not 0

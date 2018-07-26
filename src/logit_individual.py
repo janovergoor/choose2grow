@@ -76,10 +76,10 @@ class LogitModel:
             if self.vvv > 1:
                 self.message("fitting with a gradient (using BFGS)")
             # use BFGS if a gradient function is specified
-            res = minimize(lambda x: self.ll(x, w=w), self.u,
-                           jac=lambda x: self.grad(x, w=w),
-                           method='BFGS', callback=print_iter,
-                           options={'gtol': 1e-8, 'disp': False})
+            res = sp.optimize.minimize(lambda x: self.ll(x, w=w), self.u,
+                                       jac=lambda x: self.grad(x, w=w),
+                                       method='BFGS', callback=print_iter,
+                                       options={'gtol': 1e-8, 'disp': False})
             # store the standard errors
             H = res.hess_inv
             H = np.diag(np.diagonal(np.linalg.inv(H)))
@@ -88,10 +88,10 @@ class LogitModel:
             if self.vvv > 1:
                 self.message("fitting without a gradient (using L-BFGS-B)")
             # else, use L-BFGS-B
-            res = minimize(lambda x: self.ll(x, w=w), self.u,
-                           method='L-BFGS-B', callback=print_iter,
-                           bounds=self.bounds,
-                           options={'factr': 1e-12, 'disp': False})
+            res = sp.optimize.minimize(lambda x: self.ll(x, w=w), self.u,
+                                       method='L-BFGS-B', callback=print_iter,
+                                       bounds=self.bounds,
+                                       options={'factr': 1e-12, 'disp': False})
         # store the resulting parameters
         self.u = res.x
 
@@ -176,6 +176,8 @@ class DegreeLogitModel(LogitModel):
         # if no weights specified, default to 1
         if w is None:
             w = np.array([1] * self.n)
+        # assign weights to choice sets
+        W = pd.DataFrame(data={'choice_id': self.D.choice_id.unique(), 'w': w})
         # assign utilities to all cases
         self.D['score'] = np.exp(u)[self.D.deg]
         # compute total utility per case
@@ -184,11 +186,12 @@ class DegreeLogitModel(LogitModel):
         self.D['prob'] = self.D['score'] / self.D['score_tot']
         # adjust probabilities based on whether they were chosen
         self.D.loc[self.D.y == 1, 'prob'] -= 1
+        # join in weights
+        Dt = self.D.merge(W, on='choice_id', how='inner')
         # weight probabilities
-        # TODO: integrate weights. have to map i-indexed list to x-indexed list
-        #self.D['prob'] *= w
+        Dt['prob'] *= Dt['w']
         # sum over degrees to get gradient
-        return self.D.groupby('deg')['prob'].aggregate(np.sum)
+        return Dt.groupby('deg')['prob'].aggregate(np.sum)
 
 
 class PolyLogitModel(LogitModel):
@@ -217,6 +220,8 @@ class PolyLogitModel(LogitModel):
         so we use a version of the log-sum-exp trick:
 
         exp(x) / sum(exp(ys)) = exp(x - max(ys) - log(sum(exp(ys - max(ys)))))
+
+        TODO - can rewrite simpler using sp.misc.logsumexp?
         """
         # raise degree to power
         powers = np.power(np.array([self.D.deg] * len(u)).T, np.arange(len(u)))
@@ -230,25 +235,8 @@ class PolyLogitModel(LogitModel):
         score_tot = np.log(self.D.groupby('choice_id')['score_adj'].aggregate(np.sum))
         # retrieve max utility (max)
         score_max = self.D.groupby('choice_id')['score'].aggregate(np.max)
+        # combine log-sum-exp components
         return np.exp(np.array(self.D.loc[self.D.y == 1, 'score']) - score_max - score_tot)
-
-    def individual_likelihood_old(self, u):
-        """
-        Old version of the individual likelihood function of the polynomial logit model,
-        which does *not* deal with overflow issues for k > 2.
-
-        L(theta, (x,C)) = exp(sum_d theta_d*k_x^d) /
-                          sum_{y in C} exp(sum_d theta_d*k_y^d))
-
-        """
-        # raise degree to power
-        powers = np.power(np.array([self.D.deg] * len(u)).T, np.arange(len(u)))
-        # weight powers by coefficients, exp sum for score
-        self.D['score'] = np.exp(np.sum(powers * u, axis=1))
-        # compute total utility per case
-        score_tot = self.D.groupby('choice_id')['score'].aggregate(np.sum)
-        # compute probabilities of choices
-        return np.array(self.D.loc[self.D.y == 1, 'score']) / np.array(score_tot)
 
     def grad(self, u=None, w=None):
         """
@@ -258,13 +246,6 @@ class PolyLogitModel(LogitModel):
            (sum_{y in C} k_y^d*exp(sum_d theta_d*k_y^d)) /
            (sum_{y in C}       exp(sum_d theta_d*k_y^d))
         ]
-
-        TODO - 120% discrepancy with ll(), but still fits correctly...:
-
-            >>> from logit_grouped import *
-            >>> m1 = PolyLogitModel('d-0.75-0.50-00.csv', k=2)
-            >>> check_grad_rel(m1.ll, m1.grad, m1.u)
-            array([ 0.        , -1.29782027])
 
         TODO - implement exp overflow solution from individual_likelihood()
         """

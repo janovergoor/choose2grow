@@ -1,5 +1,6 @@
 from util import *
 
+
 """
 
   This script contains model definitions and objective functions for
@@ -82,10 +83,10 @@ class LogitModel:
             if self.vvv > 1:
                 self.message("fitting with a gradient (using BFGS)")
             # use BFGS if a gradient function is specified
-            res = minimize(lambda x: self.ll(x, w=w), self.u,
-                           jac=lambda x: self.grad(x, w=w),
-                           method='BFGS', callback=print_iter,
-                           options={'gtol': 1e-8, 'disp': False})
+            res = sp.optimize.minimize(lambda x: self.ll(x, w=w), self.u,
+                                       jac=lambda x: self.grad(x, w=w),
+                                       method='BFGS', callback=print_iter,
+                                       options={'gtol': 1e-8, 'disp': False})
             # store the standard errors
             H = res.hess_inv
             H = np.diag(np.diagonal(np.linalg.inv(H)))
@@ -94,10 +95,10 @@ class LogitModel:
             if self.vvv > 1:
                 self.message("fitting without a gradient (using L-BFGS-B)")
             # else, use L-BFGS-B
-            res = minimize(lambda x: self.ll(x, w=w), self.u,
-                           method='L-BFGS-B', callback=print_iter,
-                           bounds=self.bounds,
-                           options={'factr': 1e-12, 'disp': False})
+            res = sp.optimize.minimize(lambda x: self.ll(x, w=w), self.u,
+                                       method='L-BFGS-B', callback=print_iter,
+                                       bounds=self.bounds,
+                                       options={'factr': 1e-12, 'disp': False})
         # store the resulting parameters
         self.u = res.x
 
@@ -226,14 +227,15 @@ class PolyLogitModel(LogitModel):
         L(theta, (x,C)) = exp(sum_d theta_d * k_x^d) /
                           sum_{j in 1:K} n_j * exp(sum_d theta_d * j^d))
         
-        TODO - with k > 2, get overflow issues in exp (L240)
+        However, with k > 2, exp(x^d) gives overflow issues,
+        so we use a version of the log-sum-exp trick:
+
+        exp(x) / sum(ns * exp(ys)) = exp(x - log(sum(ns * exp(ys))))
         """
-        # compute poly utilities, repeat for every instance, exponentiate
-        score = np.exp(np.array([poly_utilities(self.d, u)] * self.n))
-        # sum over degrees to get total utility per case
-        score_tot = np.sum(self.N * score, axis=1)  # row sum
-        # divide utility of choice by total utility of case
-        return score[range(self.n), self.C] / score_tot
+        # compute poly utilities, repeat for every instance
+        score = np.array([poly_utilities(self.d, u)] * self.n)
+        # combine log-sum-exp components
+        return np.exp(score[range(self.n), self.C] - sp.misc.logsumexp(score, axis=1, b=self.N))
 
     def grad(self, u=None, w=None):
         """
@@ -244,14 +246,14 @@ class PolyLogitModel(LogitModel):
            (sum_{j in 1:K}       n_j * exp(sum_d theta_d * j^d))
         ]
 
-        TODO - 1000% discrepancy with ll(), but still fits correctly...:
+        Here, we also use the log-sum-exp trick in the fraction.
+
+        TODO - 129% discrepancy with ll(), but still fits seemingly correctly...:
 
             >>> from logit_grouped import *
             >>> m1 = PolyLogitModel('d-0.75-0.50-00.csv', k=2)
             >>> check_grad_rel(m1.ll, m1.grad, m1.u)
-            array([  0.        , -10.78738252])
-
-        TODO - with k > 2, get overflow issues in exp (L272)
+            array([ 0.        , -1.29782042])
         """
         # if no parameters specified, use the parameters of the object itself
         if u is None:
@@ -260,19 +262,19 @@ class PolyLogitModel(LogitModel):
         if w is None:
             w = np.array([1] * self.n)
         # compute poly utilities, repeat for every instance, exponentiate
-        score = np.exp(np.array([poly_utilities(self.d, u)] * self.n))
+        score = np.array([poly_utilities(self.d, u)] * self.n)
         # make matrix of degrees to take power
         D = np.array([range(self.d)] * self.n)
         # initialize empty gradient vector to append to
         grad = np.array([])
         # compute gradient for every polynomial degree separately
         for k in range(len(u)):
-            # compute numerator : power degree * group n * poly utility
-            num = np.sum(np.power(D, k) * self.N * score, axis=1)
-            # compute denominator : group n * poly utility
-            denom = np.sum(self.N * score, axis=1)
+            # compute 'numerator': power degree * group n * poly utility
+            num = sp.misc.logsumexp(score, axis=1, b=np.power(D, k) * self.N)
+            # compute 'denominator': group n * poly utility
+            denom = sp.misc.logsumexp(score, axis=1, b=self.N)
             # score is degree choice ^ poly degree, normalized by division
-            scores = self.C ** k - num / denom
+            scores = self.C ** k - np.exp(num - denom)
             # sum over rows, potentially weighted
             grad = np.append(grad, np.sum(scores * w))
         return -1 * grad
