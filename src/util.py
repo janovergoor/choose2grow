@@ -3,22 +3,25 @@ import networkx as nx
 import numpy as np
 import os
 import pandas as pd
+import scipy as sp
 import random
 
 from collections import Counter
 from copy import deepcopy
 from glob import glob
 from multiprocessing import Pool
-from scipy.optimize import minimize
 
 from env import *
 
 """
 
-  This script contains a few handy reused utility functions,
-  and reused parameter settings and paths.
+  This script contains a few handy reusable utility functions,
+  and parameter settings and paths.
 
 """
+
+# amount to smooth log(0) with
+log_smooth = 1e-8
 
 
 # Helper functions
@@ -50,3 +53,18 @@ def write_edge_list(T, fn):
         writer.writerow(['t', 'from', 'to'])
         for (t, i, j) in T:
             writer.writerow([t, i, j])
+
+
+def check_grad_rel(func, grad, x0, *args):
+    """
+    Does a relative check of the gradient.
+    Uses scipy.optimize.approx_fprime
+    """
+    step = 1.49e-08
+    target = sp.optimize.approx_fprime(x0, func, step, *args)
+    actual = grad(x0, *args)
+    delta = target - actual
+    # make sure target is not 0
+    delta[target > 0] /= target[target > 0]
+    return delta
+

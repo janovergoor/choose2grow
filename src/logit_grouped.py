@@ -1,5 +1,6 @@
 from util import *
 
+
 """
 
   This script contains model definitions and objective functions for
@@ -47,9 +48,9 @@ class LogitModel:
 
     def ll(self, u=None, w=None):
         """
-        Generic log-likelihood function. It computes individual log-likelihood
+        Generic log-likelihood function. It computes individual likelihood
         scores for each example using a model-specifc formula, and computes a
-        (weighted) sum.
+        (weighted) sum of their logs.
         """
         # if no parameters specified, use the parameters of the object itself
         if u is None:
@@ -60,7 +61,7 @@ class LogitModel:
         # compute individual likelihood scores
         scores = self.individual_likelihood(u)
         # add tiny smoothing for deg=0 choices
-        scores += 0.00001
+        scores += log_smooth
         # return sum
         return -1 * sum(np.log(scores) * w)
 
@@ -82,10 +83,10 @@ class LogitModel:
             if self.vvv > 1:
                 self.message("fitting with a gradient (using BFGS)")
             # use BFGS if a gradient function is specified
-            res = minimize(lambda x: self.ll(x, w=w), self.u,
-                           jac=lambda x: self.grad(x, w=w),
-                           method='BFGS', callback=print_iter,
-                           options={'gtol': 1e-8, 'disp': False})
+            res = sp.optimize.minimize(lambda x: self.ll(x, w=w), self.u,
+                                       jac=lambda x: self.grad(x, w=w),
+                                       method='BFGS', callback=print_iter,
+                                       options={'gtol': 1e-8, 'disp': False})
             # store the standard errors
             H = res.hess_inv
             H = np.diag(np.diagonal(np.linalg.inv(H)))
@@ -94,10 +95,10 @@ class LogitModel:
             if self.vvv > 1:
                 self.message("fitting without a gradient (using L-BFGS-B)")
             # else, use L-BFGS-B
-            res = minimize(lambda x: self.ll(x, w=w), self.u,
-                           method='L-BFGS-B', callback=print_iter,
-                           bounds=self.bounds,
-                           options={'factr': 1e-12, 'disp': False})
+            res = sp.optimize.minimize(lambda x: self.ll(x, w=w), self.u,
+                                       method='L-BFGS-B', callback=print_iter,
+                                       bounds=self.bounds,
+                                       options={'factr': 1e-12, 'disp': False})
         # store the resulting parameters
         self.u = res.x
 
@@ -154,22 +155,32 @@ class DegreeLogitModel(LogitModel):
         self.se = [None] * self.d  # current SE values
 
     def individual_likelihood(self, u):
+        """
+        Individual likelihood function of the grouped degree logit model.
+        Computes the likelihood for every data point (choice) separately.
+
+        L(theta, (x,C)) = exp(theta_{k_x}) / sum_{j in 1:K} n_j * exp(theta_j)
+        """
         # compute exponentiated utilities
-        E = np.array([np.exp(u)] * self.n)
-        # assign utilities to all cases
-        score = self.N * E
+        score = np.array([np.exp(u)] * self.n)
         # compute total utility per case
-        score_tot = np.sum(score, axis=1)  # row sum
+        score_tot = np.sum(self.N * score, axis=1)  # row sum
         # compute probabilities of choices
-        return score[range(score.shape[0]), self.C] / score_tot
+        return score[range(self.n), self.C] / score_tot
 
     def grad(self, u=None, w=None):
+        """
+        Gradient function of the grouped degree logit model.
+
+        grad_d(theta, D) = sum_{(x,C) in D} [ 1{k_x = d} -
+          n_d * exp(theta_d) / (sum_{j in 1:K} n_j * exp(theta_j)) ]
+        """
         if u is None:
             u = self.u
         # if no weights specified, default to 1
         if w is None:
             w = np.array([1] * self.n)
-        # make weights
+        # make weight matrix
         w = np.array([w] * self.d).T
         # compute exponentiated utilities
         E = np.array([np.exp(u)] * self.n)
@@ -179,10 +190,10 @@ class DegreeLogitModel(LogitModel):
         score_tot = np.sum(score, axis=1)  # row sum
         # compute probabilities
         prob = (score.T / score_tot).T
-        # adjust probabilities based on whether they were chosen
+        # subtract 1 from chosen degree
         prob[range(self.n), self.C] = prob[range(self.n), self.C] - 1
-        # (col) sum over degrees to compute gradient
-        return np.sum(prob * w, axis=0)
+        # sum over degrees to compute gradient
+        return np.sum(prob * w, axis=0)  # col sum
 
     def predict(self, d):
         """
@@ -209,20 +220,40 @@ class PolyLogitModel(LogitModel):
         self.bounds = bounds  # bound the parameter
 
     def individual_likelihood(self, u):
-        # compute poly utilities
-        E = np.array([poly_utilities(self.d, u)] * self.n)
-        # assign utilities to all cases
-        score = self.N * E
-        # compute total utility per case
-        score_tot = np.sum(score, axis=1)  # row sum
-        # compute probabilities of choices
-        return score[range(self.n), self.C] / score_tot
-
-    def grad_wip(self, u=None, w=None):
         """
-        Gradient of the log logit model:
-        grad(beta_k) = sum_i [ u_i^k - (sum_j exp(sum_k beta_k u_i^k) * u_i^k) / (sum_j exp(sum_k beta_k u_j^k) ]
-        TODO - this is a WIP
+        Individual likelihood function of the grouped polynomial logit model.
+        Computes the likelihood for every data point (choice) separately.
+
+        L(theta, (x,C)) = exp(sum_d theta_d * k_x^d) /
+                          sum_{j in 1:K} n_j * exp(sum_d theta_d * j^d))
+        
+        However, with k > 2, exp(x^d) gives overflow issues,
+        so we use a version of the log-sum-exp trick:
+
+        exp(x) / sum(ns * exp(ys)) = exp(x - log(sum(ns * exp(ys))))
+        """
+        # compute poly utilities, repeat for every instance
+        score = np.array([poly_utilities(self.d, u)] * self.n)
+        # combine log-sum-exp components
+        return np.exp(score[range(self.n), self.C] - sp.misc.logsumexp(score, axis=1, b=self.N))
+
+    def grad(self, u=None, w=None):
+        """
+        Gradient function of the grouped polynomial logit model.
+
+        grad(theta_d, D) = sum_{(x,C) in D} [ k_x^d -
+           (sum_{j in 1:K} j^d * n_j * exp(sum_d theta_d * j^d)) /
+           (sum_{j in 1:K}       n_j * exp(sum_d theta_d * j^d))
+        ]
+
+        Here, we also use the log-sum-exp trick in the fraction.
+
+        TODO - 129% discrepancy with ll(), but still fits seemingly correctly...:
+
+            >>> from logit_grouped import *
+            >>> m1 = PolyLogitModel('d-0.75-0.50-00.csv', k=2)
+            >>> check_grad_rel(m1.ll, m1.grad, m1.u)
+            array([ 0.        , -1.29782042])
         """
         # if no parameters specified, use the parameters of the object itself
         if u is None:
@@ -230,19 +261,22 @@ class PolyLogitModel(LogitModel):
         # if no weights specified, default to 1
         if w is None:
             w = np.array([1] * self.n)
-        # compute poly utilities
-        E1 = np.exp(np.array([poly_utilities(self.d, u)] * self.n))
-        # compute matrix of degrees
-        E2 = np.array([range(self.d)] * self.n)
+        # compute poly utilities, repeat for every instance, exponentiate
+        score = np.array([poly_utilities(self.d, u)] * self.n)
+        # make matrix of degrees to take power
+        D = np.array([range(self.d)] * self.n)
         # initialize empty gradient vector to append to
         grad = np.array([])
+        # compute gradient for every polynomial degree separately
         for k in range(len(u)):
-            # compute numerator (utility * power degree * n)
-            num = np.sum(E1 * np.power(E2, k) * self.N, axis=1)
-            # normalize by total summed up exponentiated utility
-            p = self.C ** k - (num / np.sum(E1 * self.N, axis=1))
+            # compute 'numerator': power degree * group n * poly utility
+            num = sp.misc.logsumexp(score, axis=1, b=np.power(D, k) * self.N)
+            # compute 'denominator': group n * poly utility
+            denom = sp.misc.logsumexp(score, axis=1, b=self.N)
+            # score is degree choice ^ poly degree, normalized by division
+            scores = self.C ** k - np.exp(num - denom)
             # sum over rows, potentially weighted
-            grad = np.append(grad, np.sum(p * w))
+            grad = np.append(grad, np.sum(scores * w))
         return -1 * grad
 
     def predict(self, d):
@@ -256,9 +290,6 @@ class LogLogitModel(LogitModel):
     """
     This class represents a multinomial logit model, with a
     log transformation over degrees. The model has 1 parameter.
-    p(deg_i) = exp(u * log(deg_i)) * n_i / sum_j exp(u * log(deg_j)) n_j
-    p(x_i  ) = exp(u * log(deg_i))       / sum_j exp(u * log(deg_j))
-    TODO - which one?
     """
     def __init__(self, model_id, N=None, C=None, max_deg=50, vvv=False,
                  bounds=((0, 2), )):
@@ -271,27 +302,29 @@ class LogLogitModel(LogitModel):
         self.bounds = bounds  # bound the parameter
 
     def individual_likelihood(self, u):
-        # compute matrix of degrees
-        E = np.array([range(self.d)] * self.n)
-        # set deg 0 to 1 for now...
-        E[:, 0] = 1
-        # compute exponentiated utilities of LOG degrees
-        E = np.exp(u * np.log(E))
-        # set deg 0 to 0 again
-        E[:, 0] = 0
-        # assign utilities to all cases
-        score = self.N * E
-        # compute total utility per case
-        score_tot = np.sum(score, axis=1)  # row sum
-        # compute probabilities of choices
-        return score[range(self.n), self.C] / score_tot  # P(deg_i)
-        # return np.exp(u * np.log(self.C)) / score_tot  # P(x_i)
-
-    def grad_wip(self, u=None, w=None):
         """
-        Gradient of the log logit model:
-        grad(a) = sum_i [ log(u_i) - (sum_j u_j^a * log(u_j)) / sum_j u_j^a ]
-        TODO - for some values it doesn't work..
+        Individual likelihood function of the grouped log logit model.
+        Computes the likelihood for every data point (choice) separately.
+
+        L(alpha, (x,C)) = exp(alpha * log(k_x)) /
+                          sum_{j in 1:K} n_j * exp(alpha * log(j))
+
+        """
+        # compute log utility per degree
+        score = np.exp(u * np.log(np.array([range(self.d)] * self.n) + log_smooth))
+        # compute total utility per case
+        score_tot = np.sum(self.N * score, axis=1)  # row sum
+        # compute probabilities of choices
+        return score[range(self.n), self.C] / score_tot
+
+    def grad(self, u=None, w=None):
+        """
+        Gradient function of the grouped log logit model.
+
+        grad(alpha, D) = sum_{(x,C) in D} [ ln(k_x) -
+          (sum_{j in 1:K} ln(j) * n_j * exp(alpha*ln(j))) /
+          (sum_{j in 1:K}         n_j * exp(alpha*ln(j)))
+        ]
         """
         # if no parameters specified, use the parameters of the object itself
         if u is None:
@@ -299,25 +332,17 @@ class LogLogitModel(LogitModel):
         # if no weights specified, default to 1
         if w is None:
             w = np.array([1] * self.n)
-        # construct matrix of degrees
-        E = np.array([range(self.d)] * self.n)
-        # raise degrees to the power of u, multiply by number of options
-        P = np.power(E, u) * self.N
-        # set deg 0 to 1 for now...
-        E[:, 0] = 1
-        # initiate zero matrix
-        X = np.zeros(self.N.shape)
-        # normalize row sums by log(deg)
-        # ugly hack to avoid log(0)
-        X[self.N > 0] = P[self.N > 0] * np.log(E[self.N > 0])
-        # revert back to 0 (probably not necessary)
-        X[:, 0] = 0
-        # sum up log(deg)-normalized numerator
-        num = np.sum(X, axis=1)  # row sum
-        # compute individual row values
-        p = np.log(self.C) - (num / np.sum(P, axis=1))  # inverse?
+        # make matrix of log degree
+        D = np.log(np.array([range(self.d)] * self.n) + log_smooth)
+        # compute numerator : log degree * group n * log utility
+        num = np.sum(D * self.N * np.exp(u * D), axis=1)  # row sum
+        # compute denominator : group n * log utility
+        denom = np.sum(self.N * np.exp(u * D), axis=1)  # row sum
+        # normalize by total summed up exponentiated utility
+        scores = D[range(self.n), self.C] - num / denom
         # sum over rows, potentially weighted
-        return np.array([-1 * np.sum(p * w)])
+        return -1 * np.array([np.sum(scores * w)])
+
 
     def predict(self, d):
         """
