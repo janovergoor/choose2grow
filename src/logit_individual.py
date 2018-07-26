@@ -6,6 +6,7 @@ from util import *
   multinomial logit models on *individual* data. The examples are
   represented as (choice_id, Y, degree, n_fofs).
 
+  TODO - convert MixedLogit for individual case
   TODO - incorporate / implement FOF modes
 
 """
@@ -235,7 +236,7 @@ class PolyLogitModel(LogitModel):
         # retrieve max utility (max)
         score_max = self.D.groupby('choice_id')['score'].aggregate(np.max)
         # combine log-sum-exp components
-        return np.exp(np.array(self.D.loc[self.D.y == 1, 'score']) - score_max - score_tot)
+        return np.array(np.exp(np.array(self.D.loc[self.D.y == 1, 'score']) - score_max - score_tot))
 
     def grad(self, u=None, w=None):
         """
@@ -343,11 +344,9 @@ class MixedLogitModel(LogitModel):
     l  = log logit
     px = x-degree poly logit
     d  = degree logit
-
-    TODO - update this whole class
     """
-    def __init__(self, model_id, N=None, C=None, max_deg=50, vvv=False):
-        LogitModel.__init__(self, model_id, N, C, max_deg, vvv)
+    def __init__(self, model_id, D=None, max_deg=50, vvv=False):
+        LogitModel.__init__(self, model_id, D, max_deg, vvv)
         self.model_type = 'mixed_logit'
         self.max_deg = max_deg
         self.vvv = vvv
@@ -359,7 +358,7 @@ class MixedLogitModel(LogitModel):
         """
         Add a degree logit model to the list of models.
         """
-        self.models += [DegreeLogitModel(self.id, N=self.N, C=self.C,
+        self.models += [DegreeLogitModel(self.id, D=self.D,
                                          max_deg=self.max_deg,
                                          vvv=self.vvv)]
         self.model_short += 'd'
@@ -368,7 +367,7 @@ class MixedLogitModel(LogitModel):
         """
         Add a log logit model to the list of models.
         """
-        self.models += [LogLogitModel(self.id, N=self.N, C=self.C,
+        self.models += [LogLogitModel(self.id, D=self.D,
                                       max_deg=self.max_deg, vvv=self.vvv,
                                       bounds=bounds)]
         self.model_short += 'l'
@@ -377,7 +376,7 @@ class MixedLogitModel(LogitModel):
         """
         Add a poly logit model to the list of models.
         """
-        self.models += [PolyLogitModel(self.id, N=self.N, C=self.C,
+        self.models += [PolyLogitModel(self.id, D=self.D,
                                        max_deg=self.max_deg, vvv=self.vvv,
                                        k=k, bounds=bounds)]
         self.model_short += 'p%d' % k
@@ -428,7 +427,7 @@ class MixedLogitModel(LogitModel):
 
     def write_params(self):
         """
-        Write out the estimated parameters.
+        Write out the estimated parameters as csv.
         Colums are: ['id', 'mode', 'p(k)', 'parameter', 'value', 'se']
         """
         if self.id is None:

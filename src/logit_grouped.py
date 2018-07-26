@@ -103,7 +103,7 @@ class LogitModel:
 
     def write_params(self):
         """
-        Write out the estimated parameters.
+        Write out the estimated parameters as csv.
         Colums are: ['id', 'mode', 'p(k)', 'parameter', 'value', 'se']
         """
         if self.id is None:
@@ -442,7 +442,7 @@ class MixedLogitModel(LogitModel):
 
     def write_params(self):
         """
-        Write out the estimated parameters.
+        Write out the estimated parameters as csv.
         Colums are: ['id', 'mode', 'p(k)', 'parameter', 'value', 'se']
         """
         if self.id is None:
