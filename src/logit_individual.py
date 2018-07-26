@@ -212,8 +212,34 @@ class PolyLogitModel(LogitModel):
 
         L(theta, (x,C)) = exp(sum_d theta_d*k_x^d) /
                           sum_{y in C} exp(sum_d theta_d*k_y^d))
-        
-        TODO - with k > 2, get underflow issues in exp (L219)
+
+        However, with k > 2, exp(x^d) gives overflow issues,
+        so we use a version of the log-sum-exp trick:
+
+        exp(x) / sum(exp(ys)) = exp(x - max(ys) - log(sum(exp(ys - max(ys)))))
+        """
+        # raise degree to power
+        powers = np.power(np.array([self.D.deg] * len(u)).T, np.arange(len(u)))
+        # weight powers by coefficients
+        self.D['score'] = np.sum(powers * u, axis=1)
+        # compute max score per choice set
+        self.D['max_score'] = self.D.groupby('choice_id')['score'].transform(np.max)
+        # compute exp of adjusted score
+        self.D['score_adj'] = np.exp(self.D.score - self.D.max_score)
+        # compute total utility per case
+        score_tot = np.log(self.D.groupby('choice_id')['score_adj'].aggregate(np.sum))
+        # retrieve max utility (max)
+        score_max = self.D.groupby('choice_id')['score'].aggregate(np.max)
+        return np.exp(np.array(self.D.loc[self.D.y == 1, 'score']) - score_max - score_tot)
+
+    def individual_likelihood_old(self, u):
+        """
+        Old version of the individual likelihood function of the polynomial logit model,
+        which does *not* deal with overflow issues for k > 2.
+
+        L(theta, (x,C)) = exp(sum_d theta_d*k_x^d) /
+                          sum_{y in C} exp(sum_d theta_d*k_y^d))
+
         """
         # raise degree to power
         powers = np.power(np.array([self.D.deg] * len(u)).T, np.arange(len(u)))
@@ -233,14 +259,14 @@ class PolyLogitModel(LogitModel):
            (sum_{y in C}       exp(sum_d theta_d*k_y^d))
         ]
 
-        TODO - 80% discrepancy with ll(), but still fits correctly...:
+        TODO - 120% discrepancy with ll(), but still fits correctly...:
 
             >>> from logit_grouped import *
             >>> m1 = PolyLogitModel('d-0.75-0.50-00.csv', k=2)
             >>> check_grad_rel(m1.ll, m1.grad, m1.u)
-            array([  0.        , -10.78738252])
+            array([ 0.        , -1.29782027])
 
-        TODO - with k > 2, get overflow issues in exp (L253)
+        TODO - implement exp overflow solution from individual_likelihood()
         """
         # if no parameters specified, use the parameters of the object itself
         if u is None:

@@ -226,7 +226,7 @@ class PolyLogitModel(LogitModel):
         L(theta, (x,C)) = exp(sum_d theta_d * k_x^d) /
                           sum_{j in 1:K} n_j * exp(sum_d theta_d * j^d))
         
-        TODO - with k > 2, get underflow issues in exp (L240)
+        TODO - with k > 2, get overflow issues in exp (L240)
         """
         # compute poly utilities, repeat for every instance, exponentiate
         score = np.exp(np.array([poly_utilities(self.d, u)] * self.n))
