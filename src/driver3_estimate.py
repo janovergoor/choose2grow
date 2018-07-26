@@ -1,5 +1,4 @@
 from logit_grouped import *
-from util import *
 
 """
 
@@ -53,18 +52,22 @@ if __name__ == '__main__':
 
     # individual in parallel
     graphs = os.listdir(data_path + "/choices")  # todo
-    fits = os.listdir(data_path + "/fits/logit_degree")  # already done
+    fits = os.listdir(data_path + "/fits/logit_log")  # already done
     graphs = [x for x in graphs if x not in fits]
     # graphs  = [x for x in graphs if 'g' in x]
     print("TODO: %d" % len(graphs))
-    with Pool(processes=20) as pool:
-        r = pool.map(do_one_degree, graphs)
-        # r = pool.map(do_one_mixed_logit, graphs)
+    if sys.version_info > (3, 0):
+        with Pool(processes=20) as pool:
+            r = pool.map(do_one_log, graphs)
+    else:
+        from contextlib import closing
+        with closing(Pool(processes=20)) as pool:
+            r = pool.map(do_one_log, graphs)
+            pool.terminate()
 
     # group in serial - minimize fails in parallel (at least used to)
     for gt in ['g', 'd']:
         for r in [0, 0.1, 0.25, 0.5, 0.75, 1]:
             for p in [0, 0.1, 0.25, 0.5, 0.75, 1]:
                 fn = '%s-%.2f-%.2f-all.csv' % (gt, r, p)
-                do_one_degree(fn)
-                # do_one_mixed_logit(fn)
+                do_one_log(fn)

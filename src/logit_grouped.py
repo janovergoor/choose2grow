@@ -79,26 +79,25 @@ class LogitModel:
             self.n_it += 1
 
         # check what method to use
-        if getattr(self, "grad", None) is not None:
+        # use BFGS when there is a gradient, and no bounds, returns a Hessian
+        if getattr(self, "grad", None) is not None and self.bounds is None:
             if self.vvv > 1:
-                self.message("fitting with a gradient (using BFGS)")
-            # use BFGS if a gradient function is specified
+                self.message("fitting with BFGS")
             res = sp.optimize.minimize(lambda x: self.ll(x, w=w), self.u,
                                        jac=lambda x: self.grad(x, w=w),
                                        method='BFGS', callback=print_iter,
-                                       options={'gtol': 1e-8, 'disp': False})
+                                       options={'gtol': 1e-8})
             # store the standard errors
             H = res.hess_inv
             H = np.diag(np.diagonal(np.linalg.inv(H)))
             self.se = np.diagonal(np.sqrt(np.linalg.inv(H)))
+        # else, use L-BFGS-B
         else:
             if self.vvv > 1:
-                self.message("fitting without a gradient (using L-BFGS-B)")
-            # else, use L-BFGS-B
+                self.message("fitting with L-BFGS-B")
             res = sp.optimize.minimize(lambda x: self.ll(x, w=w), self.u,
                                        method='L-BFGS-B', callback=print_iter,
-                                       bounds=self.bounds,
-                                       options={'factr': 1e-12, 'disp': False})
+                                       bounds=self.bounds)
         # store the resulting parameters
         self.u = res.x
 
@@ -291,8 +290,7 @@ class LogLogitModel(LogitModel):
     This class represents a multinomial logit model, with a
     log transformation over degrees. The model has 1 parameter.
     """
-    def __init__(self, model_id, N=None, C=None, max_deg=50, vvv=False,
-                 bounds=((0, 2), )):
+    def __init__(self, model_id, N=None, C=None, max_deg=50, vvv=False, bounds=None):
         LogitModel.__init__(self, model_id, N, C, max_deg, vvv)
         self.model_type = 'logit_log'
         self.model_short = 'l'
@@ -380,7 +378,7 @@ class MixedLogitModel(LogitModel):
                                          vvv=self.vvv)]
         self.model_short += 'd'
 
-    def add_log_model(self, bounds=((0, 2), )):
+    def add_log_model(self, bounds=None):
         """
         Add a log logit model to the list of models.
         """
