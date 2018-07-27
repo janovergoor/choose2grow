@@ -72,7 +72,10 @@ class DegreeLogitModel(LogitModel):
         # weight probabilities
         Dt['prob'] *= Dt['w']
         # sum over degrees to get gradient
-        return Dt.groupby('deg')['prob'].aggregate(np.sum)
+        Dt = Dt.groupby('deg')['prob'].aggregate(np.sum)
+        # join with degree vector to take care of zeros
+        Dd = pd.Series([0]*self.d, index=np.arange(self.d))
+        return Dd.to_frame().join(Dt.to_frame()).prob.fillna(0)
 
 
 class PolyLogitModel(LogitModel):

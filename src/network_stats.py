@@ -442,7 +442,7 @@ def compute_graph_stats(G, p=0.1):
     return res
 
 
-def choice_data(id, el, vvv=0):
+def choice_data(id, el, max_deg=50, vvv=0):
     """
     Short hand function to compute choice set directly from an edge list.
     """
@@ -453,6 +453,11 @@ def choice_data(id, el, vvv=0):
     for e in range(len(T)):
         for (y, deg, fof) in T[e]['mln_data']:
             D.append([e, y, deg, fof])
-    # return as pandas DataFrame
-    return pd.DataFrame(D, columns=['choice_id','y','deg','fof'])
+    # convert to pandas DataFrame
+    D = pd.DataFrame(D, columns=['choice_id','y','deg','fof'])
+    # remove too high degree choices
+    D = D[D.deg <= max_deg]
+    # remove cases without any choice (choice was higher than max_deg)
+    D = D[D.groupby('choice_id')['y'].transform(np.sum) == 1]
+    return D 
 
