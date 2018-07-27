@@ -219,7 +219,7 @@ class MixedLogitModel(LogitModel):
                                 max_deg=self.max_deg, vvv=self.vvv, bounds=bounds)]
         self.model_short += 'p%d' % k
 
-    def fit(self, n_rounds=20, etol=0.01):
+    def fit(self, n_rounds=20, etol=0.1):
         """
         Fit the mixed model using a version of EM.
         """
@@ -229,12 +229,11 @@ class MixedLogitModel(LogitModel):
             self.exception("not enough models specified for mixed model")
         # initate class probabilities
         self.pk = {k: 1.0 / K for k in range(K)}
-        # store previous LL
-        prev_ll = {k: 10e10 for k in range(K)}
+        # store current total log-likelihood
+        gamma = {k: [self.pk[k]] * self.n for k in range(K)}
+        prev_ll = np.sum([ms[k].ll(w=gamma[k]) for k in range(K)])
         # run EM n_rounds times
         for i in range(n_rounds):
-            if self.vvv:
-                self.message("Round %d/%d" % (i + 1, n_rounds))
             # 1) Expectation - find class responsibilities given weights
             # compute probabilities for individual examples
             probs = {k: ms[k].individual_likelihood(ms[k].u) for k in range(K)}
@@ -248,17 +247,19 @@ class MixedLogitModel(LogitModel):
                 self.pk[k] = np.mean(gamma[k])
                 # actually run the optimizer for current class
                 ms[k].fit(w=gamma[k])
+            ll = np.sum([ms[k].ll(w=gamma[k]) for k in range(K)])
             if self.vvv:
+                msg = "[%3d/%3d]" % (i + 1, n_rounds)
                 for i in range(K):
-                    self.message("[%d:%12s] P(class)=%.5f  ll=%.4f  u=%s" %
-                                 (i, ms[i].model_type, self.pk[i],
-                                  ms[i].ll(w=gamma[i]), ms[i].u))
+                    msg += "(k=%d) pi=%.3f u=%.2f ll=%.2f  " % \
+                           (i, self.pk[i], ms[i].u[0], ms[i].ll(w=gamma[i]))
+                msg += "(*) tot_ll=%.4f" % ll
+                self.message(msg)
             # compute current total likelihood
-            ll = {k: ms[k].ll(w=gamma[k]) for k in range(K)}
-            delta = np.sum([abs(prev_ll[k] - ll[k]) for k in range(K)])
+            delta = abs(ll - prev_ll)
             # stop if little difference
             if delta < etol:
-                self.message("delta in ll < %f, stopping early" % etol)
+                self.message("delta in ll (%.3f) < etol (%.3f), stopping" % (delta, etol))
                 break
             # store new ll
             prev_ll = ll

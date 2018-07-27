@@ -428,8 +428,8 @@ def compute_stats(G, p=0.1):
     res['clustering'] = nx.average_clustering(G)
     res['degree_distribution_lambda'] = fit_exponential(G)
     res['fiedler_value'] = nx.algebraic_connectivity(G)
-    # TODO - greedy_modularity_communities() might not be in this nx version
-    res['max_modularity'] = modularity(G, greedy_modularity_communities(G))
+    # TODO - greedy_modularity_communities() from NetworkX is only available in v2.2
+    # res['max_modularity'] = modularity(G, greedy_modularity_communities(G))
     res['jackson_r'] = fit_jackson_r(G)
     if nx.is_connected(G):
         res['avg_shortest_path'] = appr_average_shortest_path_length(G, p)

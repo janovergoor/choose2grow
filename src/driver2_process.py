@@ -34,5 +34,5 @@ if __name__ == '__main__':
     graphs = [x for x in graphs if x not in choices]
     graphs = [x for x in graphs if 'all' not in x]  # remove school networks
     print("TODO: %d" % len(graphs))
-    with Pool(processes=10) as pool:
+    with Pool(processes=20) as pool:
         r = pool.map(process_all_edges, graphs)
