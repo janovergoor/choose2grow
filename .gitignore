@@ -3,3 +3,4 @@
 *.html
 *.pyc
 env*
+.ipynb_checkpoints
