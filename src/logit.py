@@ -20,12 +20,20 @@ class LogitModel:
         Constructor for a LogitModel object. The data can be provided directly,
         or it can be read in from file.
 
-        * model_id can be either the file name from where the choices are 
-          read, or an idenfier for the current model
-        * grouped is a boolean that signifies whether the data is grouped
-          (by  degree), or if it contains individual rows
-        * max_deg is the max degree considered (d-1)
-        * vvv represents the level of debug output (0-2)
+        Keyword arguments:
+
+        model_id -- model_id can be either the file name from where the choices
+            are read, or an idenfier for the current model
+        grouped -- boolean signifiying whether the data is grouped (by degree),
+            or if it contains individual rows (default: True)
+        max_deg -- the max degree that will be considered (default: 50)
+        N -- 2d-array representing choice sets, if the data is supplied
+            directly in grouped format (default: None)
+        C -- 1d-array representing chosen objects, if the data is supplied
+            directly in grouped format (default: None)
+        D -- 2d-array representing choice options, if the data is supplied
+            directly in individual format (default: None)
+        vvv -- int representing level of debug output [0:none, 1:some, 2:lots]
 
         If data is supplied directly, it can be done one of two formats:
         1) grouped: N is a n*d matrix representing the d-dimensional options
@@ -89,13 +97,11 @@ class LogitModel:
         """
         # reset number of iterations
         self.n_it = 0
-
         # helper function to print out intermediate values of the ll function
         def print_iter(x):
             if self.n_it % 10 == 0 and self.vvv > 1:
                 self.message("i=%3d ll=%.5f" % (self.n_it, self.ll(x)))
             self.n_it += 1
-
         # check what method to use
         # use BFGS when there is a gradient, and no bounds, returns a Hessian
         if getattr(self, "grad", None) is not None and self.bounds is None:
@@ -118,6 +124,8 @@ class LogitModel:
                            bounds=self.bounds)
         # store the resulting parameters
         self.u = res.x
+        if self.vvv > 0:
+            self.message("parameters after fitting: %.3f" % self.u)
 
     def write_params(self):
         """
@@ -165,15 +173,42 @@ from logit_individual import *
 class MixedLogitModel(LogitModel):
     """
     This class represents a generic mixed logit model. It has similar
-    functionality as LogitModel, but the individual logits that the
-    mixed model is composed of have to be added manually.
+    functionality as LogitModel, but the individual logits that the mixed model
+    is composed of have to be added manually.
 
     The constituent models are represented by the following shortcuts:
-    l  = log logit
-    px = x-degree poly logit
-    d  = degree logit
+      l  = log logit
+      px = x-degree poly logit
+      d  = degree logit
     """
     def __init__(self, model_id, grouped=True, max_deg=50, N=None, C=None, D=None, vvv=0):
+        """
+        Constructor for a MixedLogitModel object. It inherits from LogitModel,
+        but is also composed of LogitModel modes. Like LogitModel, the data can
+        be provided directly, or it can be read in from file.
+
+        Keyword arguments:
+
+        model_id -- model_id can be either the file name from where the choices
+            are read, or an idenfier for the current model
+        grouped -- boolean signifiying whether the data is grouped (by degree),
+            or if it contains individual rows (default: True)
+        max_deg -- the max degree that will be considered (default: 50)
+        N -- 2d-array representing choice sets, if the data is supplied
+            directly in grouped format (default: None)
+        C -- 1d-array representing chosen objects, if the data is supplied
+            directly in grouped format (default: None)
+        D -- 2d-array representing choice options, if the data is supplied
+            directly in individual format (default: None)
+        vvv -- int representing level of debug output [0:none, 1:some, 2:lots]
+
+        If data is supplied directly, it can be done one of two formats:
+        1) grouped: N is a n*d matrix representing the d-dimensional options
+           for each of the n examples. C is an n*1 vector of choices.
+        2) individual: D is a (n*i)x4 matrix, where each choice set has i
+           choices, exactly one of which should be chosen. For every example
+           we get the following covariates: [choice_id, Y, degree, n_fofs]
+        """
         LogitModel.__init__(self, model_id, grouped=grouped, max_deg=max_deg, N=N, C=C, D=D, vvv=vvv)
         self.grouped = grouped
         self.model_type = 'mixed_logit'

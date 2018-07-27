@@ -250,7 +250,7 @@ def fof_paths(G, i):
 # Stats wrapper functions
 #
 
-def process_all_edges(graph, verbose=False):
+def process_all_edges(graph, vvv=0):
     """
     Read in a graph from an edge list, compute for every edge the network
     context when that edge was formed, and write out the results.
@@ -258,9 +258,9 @@ def process_all_edges(graph, verbose=False):
     'graph' is a filename
     """
     # read the edge list from file
-    el = read_edge_list(graph)
+    el = read_edge_list(graph, vvv)
     # extract edge stats from the edge list
-    (G, T) = compute_edge_stats(graph, el, verbose)
+    (G, T) = compute_edge_stats(graph, el, vvv)
     # write the different outcomes in parts
 
     # write degrees
@@ -270,7 +270,7 @@ def process_all_edges(graph, verbose=False):
         writer.writerow(['node', 'degree'])
         for k, v in dict(G.degree()).items():
             writer.writerow([k, v])
-    if verbose:
+    if vvv > 1:
         print("[%s] did degrees" % graph)
 
     # write stats
@@ -282,7 +282,7 @@ def process_all_edges(graph, verbose=False):
         stats = compute_graph_stats(G)
         for k, v in stats.items():
             writer.writerow([k, v])
-    if verbose:
+    if vvv > 1:
         print("[%s] did stats" % graph)
 
     # write edges
@@ -294,7 +294,7 @@ def process_all_edges(graph, verbose=False):
         writer.writerow(cols)
         for e in T:
             writer.writerow([e[x] for x in cols])
-    if verbose:
+    if vvv > 1:
         print("[%s] did edges" % graph)
 
     # write (degree) choice sets
@@ -306,7 +306,7 @@ def process_all_edges(graph, verbose=False):
             for deg, n in T[e]['degree_distribution'].items():
                 c = 1 if deg == T[e]['deg_j'] else 0
                 writer.writerow([e, deg, n, c])
-    if verbose:
+    if vvv > 1:
         print("[%s] did choices" % graph)
 
     # write negatively sampled (degree, fof) choice sets
@@ -317,11 +317,11 @@ def process_all_edges(graph, verbose=False):
         for e in range(len(T)):
             for (y, deg, fof) in T[e]['mln_data']:
                 writer.writerow([e, y, deg, fof])
-    if verbose:
+    if vvv > 0:
         print("[%s] did sampled choices" % graph)
 
 
-def compute_edge_stats(graph, el, verbose=False):
+def compute_edge_stats(graph, el, vvv=0):
     """
     Reconstruct a graph from an edge list and for every edge, compute
     relevant context statistics of the graph when the edge was formed.
@@ -342,8 +342,8 @@ def compute_edge_stats(graph, el, verbose=False):
     for (t, i, j) in el:
         if t == 0:
             G.add_edge(i, j)
-    if verbose:
-        print("[%s] inital graph has %d nodes and %d edges" %
+    if vvv > 1:
+        print("[%s] initial graph has %d nodes and %d edges" %
               (graph, len(G.nodes()), len(G.edges())))
     # look at every edge individually
     T = []
@@ -401,12 +401,12 @@ def compute_edge_stats(graph, el, verbose=False):
         })
         # actually add the edge
         G.add_edge(i, j)
-        if verbose:
+        if vvv > 1:
             if len(G.edges()) % 1000 == 0:
                 print("[%s] done %d/%d edges" %
                       (graph, len(G.edges()), len(el)))
     # print final statement
-    if verbose:
+    if vvv > 0:
         print("[%s] final graph has %d nodes and %d edges" %
               (graph, len(G.nodes()), len(G.edges())))
     # return graph and edge list
@@ -440,4 +440,19 @@ def compute_graph_stats(G, p=0.1):
             res['avg_shortest_path'] = -1
             res['diameter'] = -1
     return res
+
+
+def choice_data(id, el, vvv=0):
+    """
+    Short hand function to compute choice set directly from an edge list.
+    """
+    # extract edge features from edge list
+    (G, T) = compute_edge_stats(id, el, vvv)
+    # extract just the choice set data
+    D = []
+    for e in range(len(T)):
+        for (y, deg, fof) in T[e]['mln_data']:
+            D.append([e, y, deg, fof])
+    # return as pandas DataFrame
+    return pd.DataFrame(D, columns=['choice_id','y','deg','fof'])
 

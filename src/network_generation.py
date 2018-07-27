@@ -9,8 +9,8 @@ from util import *
 """
 
 
-def generate_mixed_model(G_in, n_max=100, r=0.5, p=0.5, grow=True,
-                         m=1, debug=False):
+def generate_mixed_model(id, G_in=None, n_max=100, r=0.5, p=0.5, grow=True,
+                         m=1, vvv=0):
     """
     Generate a graph with n_max edges according to the full mixed model,
     combining preferential attachment and Jackson-Rogers random connecting
@@ -37,8 +37,19 @@ def generate_mixed_model(G_in, n_max=100, r=0.5, p=0.5, grow=True,
 
     The function returns an ordered edge list.
     """
-    G = G_in.copy()
-    T = [(0, e[0], e[1]) for e in G.edges()]  # store edges
+    # if no input graph is given, start with a default graph
+    if G_in is None:
+        if grow:
+            # small cycle graph for grow
+            G = nx.cycle_graph(n=5)
+        else:
+            # sparse ER graph for dense
+            G = nx.erdos_renyi_graph(1000, 0.005)
+    else:
+        # else, copy the input graph
+        G = G_in.copy()
+    # store edges
+    T = [(0, e[0], e[1]) for e in G.edges()]
     # set m to 1 if grow=False, as each edges is created individually
     if not grow:
         m = 1
@@ -89,22 +100,22 @@ def generate_mixed_model(G_in, n_max=100, r=0.5, p=0.5, grow=True,
                     j = random_sample(eligible_fofs)
             # check if edge didn't happen, already exists, or is a self-edge
             if j is None or G.has_edge(i, j) or i == j:
-                if debug:
+                if vvv > 1:
                     if R < r or len(friends) < 2:
                         if P > p:
-                            print("node:%d - R<r P>p - %d" %
-                                  (i, len(eligible_js)))
+                            print("[%s] node:%d - R<r P>p - %d" %
+                                  (id, i, len(eligible_js)))
                         else:
-                            print("node:%d - R<r P<p - %d" %
-                                  (i, len(list(nx.neighbors(G, k)))))
+                            print("[%s] node:%d - R<r P<p - %d" %
+                                  (id, i, len(list(nx.neighbors(G, k)))))
                     else:
                         if P < p:
-                            print("node:%d - R>r P<p - (%d, %d)" %
-                                  (i, len(list(nx.neighbors(G, i))),
+                            print("[%s] node:%d - R>r P<p - (%d, %d)" %
+                                  (id, i, len(list(nx.neighbors(G, i))),
                                   len(list(nx.neighbors(G, k))) if k is not None else 0))
                         else:
-                            print("node:%d - R>r P>p - %d" %
-                                  (i, len(eligible_fofs)))
+                            print("[%s] node:%d - R>r P>p - %d" %
+                                  (id, i, len(eligible_fofs)))
                 if grow:
                     continue
                 else:
@@ -114,6 +125,10 @@ def generate_mixed_model(G_in, n_max=100, r=0.5, p=0.5, grow=True,
             G.add_edge(i, j)
             m_total += 1
             m_node += 1
+    if vvv:
+        print("[%s] generated a %s graph with %d nodes and %d edges (r=%.2f, p=%.2f)" % \
+              (id, 'growing' if grow else 'densifying',
+               G.number_of_nodes(), G.number_of_edges(), r, p))
     # return the final graph
     return (G, T)
 

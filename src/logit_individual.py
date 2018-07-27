@@ -19,6 +19,9 @@ class DegreeLogitModel(LogitModel):
     distinct coefficient beta_i for each individual degree i.
     """
     def __init__(self, model_id, D=None, max_deg=50, vvv=False):
+        """
+        Constructor inherits from LogitModel.
+        """
         LogitModel.__init__(self, model_id, grouped=False, D=D, max_deg=max_deg, vvv=vvv)
         self.model_type = 'logit_degree'
         self.model_short = 'd'
@@ -78,6 +81,9 @@ class PolyLogitModel(LogitModel):
     polynomial functional form: u[i] = sum_d ( i^d * theta[d] )
     """
     def __init__(self, model_id, D=None, max_deg=50, vvv=False, k=2, bounds=None):
+        """
+        Constructor inherits from LogitModel.
+        """
         LogitModel.__init__(self, model_id, grouped=False, D=D, max_deg=max_deg, vvv=vvv)
         self.model_type = 'logit_poly'
         self.model_short = 'p'
@@ -159,6 +165,9 @@ class LogLogitModel(LogitModel):
     log transformation over degrees. The model has 1 parameter.
     """
     def __init__(self, model_id, D=None, max_deg=50, vvv=False, bounds=None):
+        """
+        Constructor inherits from LogitModel.
+        """
         LogitModel.__init__(self, model_id, grouped=False, D=D, max_deg=max_deg, vvv=vvv)
         self.model_type = 'logit_log'
         self.model_short = 'l'
@@ -175,7 +184,7 @@ class LogLogitModel(LogitModel):
         L(alpha, (x,C)) = exp(alpha * log(k_x)) / sum_{y in C} exp(alpha * log(k_y))
         """
         # transform degree to score
-        self.D['score'] = np.exp(u * np.log(self.D.deg + log_smooth))
+        self.D['score'] = np.exp(u * np.log(self.D.deg + util.log_smooth))
         # compute total utility per case
         score_tot = self.D.groupby('choice_id')['score'].aggregate(np.sum)
         # compute probabilities of choices

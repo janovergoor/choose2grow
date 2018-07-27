@@ -21,6 +21,9 @@ class DegreeLogitModelGrouped(LogitModel):
     distinct coefficient beta_i for each individual degree i.
     """
     def __init__(self, model_id, N=None, C=None, max_deg=50, vvv=False):
+        """
+        Constructor inherits from LogitModel.
+        """
         LogitModel.__init__(self, model_id, grouped=True, N=N, C=C, max_deg=max_deg, vvv=vvv)
         self.model_type = 'logit_degree_group'
         self.model_short = 'd'
@@ -75,6 +78,9 @@ class PolyLogitModelGrouped(LogitModel):
     polynomial functional form: [i] = sum_k ( i^k * theta[i] )
     """
     def __init__(self, model_id, N=None, C=None, max_deg=50, vvv=False, bounds=None, k=2):
+        """
+        Constructor inherits from LogitModel.
+        """
         LogitModel.__init__(self, model_id, grouped=True, N=N, C=C, max_deg=max_deg, vvv=vvv)
         self.model_type = 'logit_poly_group'
         self.model_short = 'p'
@@ -149,6 +155,9 @@ class LogLogitModelGrouped(LogitModel):
     log transformation over degrees. The model has 1 parameter.
     """
     def __init__(self, model_id, N=None, C=None, max_deg=50, vvv=False, bounds=None):
+        """
+        Constructor inherits from LogitModel.
+        """
         LogitModel.__init__(self, model_id, grouped=True, N=N, C=C, max_deg=max_deg, vvv=vvv)
         self.model_type = 'logit_log_group'
         self.model_short = 'l'

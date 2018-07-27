@@ -74,7 +74,7 @@ def check_grad_rel(func, grad, x0, *args):
 
 def write_edge_list(T, fn):
     """
-    Write a time-stamped edge list to file.
+    Write a time-stamped edge list to a csv file.
     Output format is: ['t', 'from', 'to']
     """
     with open(fn, 'w') as f:
@@ -84,11 +84,11 @@ def write_edge_list(T, fn):
             writer.writerow([t, i, j])
 
 
-def read_edge_list(graph):
+def read_edge_list(graph, vvv=0):
     """
-    Read a time-steamped edge list to file.
-    Regular input format is: ['ts', 'from', 'to']
-    For FB data, format is : ['i', 'j', 'ts', 'direction']
+    Read a time-steamped edge list from a csv file.
+    The expected input format is: ['ts', 'from', 'to']
+    For FB data, the format is: ['i', 'j', 'ts', 'direction']
     """
     # read in the edge list
     el = []
@@ -106,12 +106,12 @@ def read_edge_list(graph):
                 else:
                     row = [row[2], row[0], row[1]]
             el.append([int(x) for x in row])
-
-    print("[%s] read %d edges" % (graph, len(el)))
+    if vvv > 0:
+        print("[%s] read %d edges" % (graph, len(el)))
     return el
 
 
-def read_grouped_data(fn, max_deg=50, vvv=False):
+def read_grouped_data(fn, max_deg=50, vvv=0):
     """
     Read grouped data for either a single graph's choice sets,
     or all graphs with the specified parameters.
@@ -168,7 +168,7 @@ def read_grouped_data_single(fn, max_deg=50):
     return (N, C)
 
 
-def read_individual_data(fn, max_deg=50, vvv=False):
+def read_individual_data(fn, max_deg=50, vvv=0):
     """
     Read individual data for either a single graph's choice sets,
     or all graphs with the specified parameters.

@@ -33,27 +33,26 @@ def do_one_dense_cycle(id):
     """
     Generate a small random graph, and for each value of r and p,
     generate a "mixed model" with a densifying process.
+    The same graph is reused for every value of (r,p)!
     """
     Gt = nx.erdos_renyi_graph(1000, 0.005)
     for p in [0, 0.1, 0.25, 0.5, 0.75, 1]:
         for r in [0, 0.1, 0.25, 0.5, 0.75, 1]:
             fn = '%s/d-%.2f-%.2f-%.02d.csv' % (graphs_path, r, p, id)
             print(fn)
-            (G, el) = generate_mixed_model(Gt, n_max=ns[p], r=r, p=p, grow=False)
+            (G, el) = generate_mixed_model(fn, graph=Gt, n_max=ns[p], r=r, p=p, grow=False)
             write_edge_list(el, fn)
 
 
 def do_one_grow_cycle(id):
     """
-    Generate a small cycle graph, and for each value of r and p,
-    generate a "mixed model" with a growing process.
+    For each value of r and p, generate a "mixed model" with a growing process.
     """
-    Gt = nx.cycle_graph(n=5)
     for p in [0, 0.1, 0.25, 0.5, 0.75, 1]:
         for r in [0, 0.1, 0.25, 0.5, 0.75, 1]:
             fn = '%s/g-%.2f-%.2f-%.02d.csv' % (graphs_path, r, p, id)
             print(fn)
-            (G, el) = generate_mixed_model(Gt, n_max=ns[p], r=r, p=p, grow=True, m=4)
+            (G, el) = generate_mixed_model(fn, n_max=ns[p], r=r, p=p, grow=True, m=4)
             write_edge_list(el, fn)
 
 
