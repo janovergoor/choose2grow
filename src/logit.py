@@ -125,7 +125,7 @@ class LogitModel:
         # store the resulting parameters
         self.u = res.x
         if self.vvv > 0:
-            self.message("parameters after fitting: %.3f" % self.u)
+            self.message("parameters after fitting: " + str(self.u))
 
     def write_params(self):
         """
@@ -224,10 +224,10 @@ class MixedLogitModel(LogitModel):
         """
         if self.grouped:
             self.models += [DegreeLogitModelGrouped(self.id, N=self.N, C=self.C,
-                                max_deg=self.max_deg, vvv=self.vvv)]
+                                max_deg=self.max_deg)]
         else:
             self.models += [DegreeLogitModel(self.id, D=self.D,
-                                max_deg=self.max_deg, vvv=self.vvv)]
+                                max_deg=self.max_deg)]
         self.model_short += 'd'
 
     def add_log_model(self, bounds=None):
@@ -236,10 +236,10 @@ class MixedLogitModel(LogitModel):
         """
         if self.grouped:
             self.models += [LogLogitModelGrouped(self.id, N=self.N, C=self.C,
-                                max_deg=self.max_deg, vvv=self.vvv, bounds=bounds)]
+                                max_deg=self.max_deg, bounds=bounds)]
         else:
             self.models += [LogLogitModel(self.id, D=self.D,
-                                max_deg=self.max_deg, vvv=self.vvv, bounds=bounds)]
+                                max_deg=self.max_deg, bounds=bounds)]
         self.model_short += 'l'
 
     def add_poly_model(self, k=2, bounds=None):
@@ -248,18 +248,25 @@ class MixedLogitModel(LogitModel):
         """
         if self.grouped:
             self.models += [PolyLogitModelGrouped(self.id, N=self.N, C=self.C, k=k,
-                                max_deg=self.max_deg, vvv=self.vvv, bounds=bounds)]
+                                max_deg=self.max_deg, bounds=bounds)]
         else:
             self.models += [PolyLogitModel(self.id, D=self.D, k=k,
-                                max_deg=self.max_deg, vvv=self.vvv, bounds=bounds)]
+                                max_deg=self.max_deg, bounds=bounds)]
         self.model_short += 'p%d' % k
 
-    def fit(self, n_rounds=20, etol=0.1):
+    def fit(self, n_rounds=20, etol=0.1, return_stats=False):
         """
         Fit the mixed model using a version of EM.
+
+        Keyword arguments:
+
+        n_rounds -- maximum number of iterations before the process stops
+        etol -- minimum delta in total likelihood before the process stops
+        return_stats -- return a pandas DataFrame with stats for every round
         """
         ms = self.models  # shorthand
         K = len(ms)
+        T = []
         if K < 1:
             self.exception("not enough models specified for mixed model")
         # initate class probabilities
@@ -283,13 +290,21 @@ class MixedLogitModel(LogitModel):
                 # actually run the optimizer for current class
                 ms[k].fit(w=gamma[k])
             ll = np.sum([ms[k].ll(w=gamma[k]) for k in range(K)])
+            
+            # gather stats for this round
+            stats = [i]
+            for k in range(K):
+                stats += [self.pk[k], ms[k].u[0], ms[k].ll(w=gamma[k])]
+            stats.append(ll)
+            T.append(stats)
+            # optionally print round info
             if self.vvv:
-                msg = "[%3d/%3d]" % (i + 1, n_rounds)
-                for i in range(K):
-                    msg += "(k=%d) pi=%.3f u=%.2f ll=%.2f  " % \
-                           (i, self.pk[i], ms[i].u[0], ms[i].ll(w=gamma[i]))
-                msg += "(*) tot_ll=%.4f" % ll
-                self.message(msg)
+                msg = "[%s/%3d] " % ("%3d", n_rounds)
+                for k in range(1, K + 1):
+                    msg += " (%d) pi_%d=%s u_%d=%s ll_%d=%s " % \
+                           (k, k, "%.3f", k, "%.2f", k, "%.2f")
+                msg += " (*) tot_ll=%.4f"
+                self.message(msg % tuple(stats))
             # compute current total likelihood
             delta = abs(ll - prev_ll)
             # stop if little difference
@@ -298,6 +313,15 @@ class MixedLogitModel(LogitModel):
                 break
             # store new ll
             prev_ll = ll
+        # return the iteration stats
+        if return_stats:
+            # construct header
+            header = ['i']
+            for k in range(1, K + 1):
+                header += ['p%d' % k, 'u%d' % k, 'll%d' % k]
+            header += ['tot_ll']
+            return pd.DataFrame(T, columns=header)
+
 
     def write_params(self):
         """
