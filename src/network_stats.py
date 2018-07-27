@@ -257,26 +257,79 @@ def process_all_edges(graph, verbose=False):
 
     'graph' is a filename
     """
+    # read the edge list from file
+    el = read_edge_list(graph)
+    # extract edge stats from the edge list
+    (G, T) = compute_edge_stats(graph, el, verbose)
+    # write the different outcomes in parts
 
-    # read in the edge list
-    el = []
-    sep = ',' if synth else '\t'
-    with open('%s/%s' % (graphs_path, graph), 'r') as f:
-        reader = csv.reader(f, delimiter=sep)
-        if synth:
-            next(reader, None)  # skip header
-        for row in reader:
-            # FB networks are unordered but with direction
-            if len(row) == 4:
-                # switch if necessary
-                if row[3] == '2':
-                    row = [row[2], row[1], row[0]]
-                else:
-                    row = [row[2], row[0], row[1]]
-            el.append([int(x) for x in row])
+    # write degrees
+    fn = '%s/%s/%s' % (data_path, 'degrees', graph)
+    with open(fn, 'w') as f:
+        writer = csv.writer(f)
+        writer.writerow(['node', 'degree'])
+        for k, v in dict(G.degree()).items():
+            writer.writerow([k, v])
+    if verbose:
+        print("[%s] did degrees" % graph)
 
-    print("[%s] read %d edges" % (graph, len(el)))
+    # write stats
+    fn = '%s/%s/%s' % (data_path, 'stats', graph)
+    with open(fn, 'w') as f:
+        writer = csv.writer(f)
+        writer.writerow(['stat', 'value'])
+        # compute stats on the outcome graph
+        stats = compute_graph_stats(G)
+        for k, v in stats.items():
+            writer.writerow([k, v])
+    if verbose:
+        print("[%s] did stats" % graph)
 
+    # write edges
+    cols = ['t', 'i', 'j', 'n', 'n_elig', 'n_elig_fof', 'deg_i', 'n_deg_i',
+            'deg_j', 'n_deg_j', 'fof_deg', 'n_fof_deg', 'tot_fof']
+    fn = '%s/%s/%s' % (data_path, 'edges', graph)
+    with open(fn, 'w') as f:
+        writer = csv.writer(f)
+        writer.writerow(cols)
+        for e in T:
+            writer.writerow([e[x] for x in cols])
+    if verbose:
+        print("[%s] did edges" % graph)
+
+    # write (degree) choice sets
+    fn = '%s/%s/%s' % (data_path, 'choices', graph)
+    with open(fn, 'w') as f:
+        writer = csv.writer(f)
+        writer.writerow(['choice_id', 'deg', 'n', 'c'])
+        for e in range(len(T)):
+            for deg, n in T[e]['degree_distribution'].items():
+                c = 1 if deg == T[e]['deg_j'] else 0
+                writer.writerow([e, deg, n, c])
+    if verbose:
+        print("[%s] did choices" % graph)
+
+    # write negatively sampled (degree, fof) choice sets
+    fn = '%s/%s/%s' % (data_path, 'choices_sampled', graph)
+    with open(fn, 'w') as f:
+        writer = csv.writer(f)
+        writer.writerow(['choice_id', 'y', 'deg', 'fof'])
+        for e in range(len(T)):
+            for (y, deg, fof) in T[e]['mln_data']:
+                writer.writerow([e, y, deg, fof])
+    if verbose:
+        print("[%s] did sampled choices" % graph)
+
+
+def compute_edge_stats(graph, el, verbose=False):
+    """
+    Reconstruct a graph from an edge list and for every edge, compute
+    relevant context statistics of the graph when the edge was formed.
+    The function returns the final graph and the list of statistics.
+
+    'graph' is an identifier or filename as a string
+    'el' is a list of (ts, from, to) tuples 
+    """
     # construct 't=0' for actual graphs based on year
     if not synth:
         y = graph.split('_')[-1].split('.')[0]
@@ -284,17 +337,14 @@ def process_all_edges(graph, verbose=False):
         for i in range(len(el)):
             if el[i][0] < t:
                 el[i][0] = 0
-
     # create initial graph
     G = nx.Graph()
     for (t, i, j) in el:
         if t == 0:
             G.add_edge(i, j)
-
     if verbose:
         print("[%s] inital graph has %d nodes and %d edges" %
               (graph, len(G.nodes()), len(G.edges())))
-
     # look at every edge individually
     T = []
     for (t, i, j) in el:
@@ -355,68 +405,15 @@ def process_all_edges(graph, verbose=False):
             if len(G.edges()) % 1000 == 0:
                 print("[%s] done %d/%d edges" %
                       (graph, len(G.edges()), len(el)))
-
+    # print final statement
     if verbose:
         print("[%s] final graph has %d nodes and %d edges" %
               (graph, len(G.nodes()), len(G.edges())))
-
-    # write degrees
-    fn = '%s/%s/%s' % (data_path, 'degrees', graph)
-    with open(fn, 'w') as f:
-        writer = csv.writer(f)
-        writer.writerow(['node', 'degree'])
-        for k, v in dict(G.degree()).items():
-            writer.writerow([k, v])
-    if verbose:
-        print("[%s] did degrees" % graph)
-
-    # write stats
-    fn = '%s/%s/%s' % (data_path, 'stats', graph)
-    with open(fn, 'w') as f:
-        writer = csv.writer(f)
-        writer.writerow(['stat', 'value'])
-        for k, v in compute_stats(G).items():
-            writer.writerow([k, v])
-    if verbose:
-        print("[%s] did stats" % graph)
-
-    # write edges
-    cols = ['t', 'i', 'j', 'n', 'n_elig', 'n_elig_fof', 'deg_i', 'n_deg_i',
-            'deg_j', 'n_deg_j', 'fof_deg', 'n_fof_deg', 'tot_fof']
-    fn = '%s/%s/%s' % (data_path, 'edges', graph)
-    with open(fn, 'w') as f:
-        writer = csv.writer(f)
-        writer.writerow(cols)
-        for e in T:
-            writer.writerow([e[x] for x in cols])
-    if verbose:
-        print("[%s] did edges" % graph)
-
-    # write (degree) choice sets
-    fn = '%s/%s/%s' % (data_path, 'choices', graph)
-    with open(fn, 'w') as f:
-        writer = csv.writer(f)
-        writer.writerow(['choice_id', 'deg', 'n', 'c'])
-        for e in range(len(T)):
-            for deg, n in T[e]['degree_distribution'].items():
-                c = 1 if deg == T[e]['deg_j'] else 0
-                writer.writerow([e, deg, n, c])
-    if verbose:
-        print("[%s] did choices" % graph)
-
-    # write negatively sampled (degree, fof) choice sets
-    fn = '%s/%s/%s' % (data_path, 'choices_sampled', graph)
-    with open(fn, 'w') as f:
-        writer = csv.writer(f)
-        writer.writerow(['choice_id', 'y', 'deg', 'fof'])
-        for e in range(len(T)):
-            for (y, deg, fof) in T[e]['mln_data']:
-                writer.writerow([e, y, deg, fof])
-    if verbose:
-        print("[%s] did sampled choices" % graph)
+    # return graph and edge list
+    return (G, T)
 
 
-def compute_stats(G, p=0.1):
+def compute_graph_stats(G, p=0.1):
     """
     Wrapper function to compute statistics of a single graph.
     """
@@ -443,3 +440,4 @@ def compute_stats(G, p=0.1):
             res['avg_shortest_path'] = -1
             res['diameter'] = -1
     return res
+

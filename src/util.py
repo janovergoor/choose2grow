@@ -44,17 +44,6 @@ def random_sample(candidates):
     return random.sample(candidates, 1)[0]
 
 
-def write_edge_list(T, fn):
-    """
-    Write a time-stamped edge list to file.
-    """
-    with open(fn, 'w') as f:
-        writer = csv.writer(f)
-        writer.writerow(['t', 'from', 'to'])
-        for (t, i, j) in T:
-            writer.writerow([t, i, j])
-
-
 def poly_utilities(n, theta):
     """
     Generate utilities of the form: u[i] = sum_k (i^k * theta[i])
@@ -82,6 +71,45 @@ def check_grad_rel(func, grad, x0, *args):
 #
 #  Data reading functions
 #
+
+def write_edge_list(T, fn):
+    """
+    Write a time-stamped edge list to file.
+    Output format is: ['t', 'from', 'to']
+    """
+    with open(fn, 'w') as f:
+        writer = csv.writer(f)
+        writer.writerow(['t', 'from', 'to'])
+        for (t, i, j) in T:
+            writer.writerow([t, i, j])
+
+
+def read_edge_list(graph):
+    """
+    Read a time-steamped edge list to file.
+    Regular input format is: ['ts', 'from', 'to']
+    For FB data, format is : ['i', 'j', 'ts', 'direction']
+    """
+    # read in the edge list
+    el = []
+    sep = ',' if synth else '\t'
+    with open('%s/%s' % (graphs_path, graph), 'r') as f:
+        reader = csv.reader(f, delimiter=sep)
+        if synth:
+            next(reader, None)  # skip header
+        for row in reader:
+            # FB networks are unordered but with direction
+            if len(row) == 4:
+                # switch if necessary
+                if row[3] == '2':
+                    row = [row[2], row[1], row[0]]
+                else:
+                    row = [row[2], row[0], row[1]]
+            el.append([int(x) for x in row])
+
+    print("[%s] read %d edges" % (graph, len(el)))
+    return el
+
 
 def read_grouped_data(fn, max_deg=50, vvv=False):
     """
@@ -114,6 +142,7 @@ def read_grouped_data(fn, max_deg=50, vvv=False):
         print("[%s] read (%d x %d)" % (fn, N.shape[0], N.shape[1]))
     return (N, C)
 
+
 def read_grouped_data_single(fn, max_deg=50):
     """
     Read data (options and choices) for a single graph.
@@ -137,6 +166,7 @@ def read_grouped_data_single(fn, max_deg=50):
     # convert choices to vector
     C = np.array(dg[dg.c == 1].deg)
     return (N, C)
+
 
 def read_individual_data(fn, max_deg=50, vvv=False):
     """
@@ -166,6 +196,7 @@ def read_individual_data(fn, max_deg=50, vvv=False):
     if vvv:
         print("[%s] read (%d x %d)" % (fn, D.shape[0], D.shape[1]))
     return D
+
 
 def read_individual_data_single(fn, max_deg=50):
     """
