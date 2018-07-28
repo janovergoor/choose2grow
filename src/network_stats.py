@@ -260,7 +260,7 @@ def process_all_edges(graph, vvv=0):
     # read the edge list from file
     el = read_edge_list(graph, vvv)
     # extract edge stats from the edge list
-    (G, T) = compute_edge_stats(graph, el, vvv)
+    (G, T) = compute_edge_stats(graph, el, n_alt=5, vvv=vvv)
     # write the different outcomes in parts
 
     # write degrees
@@ -321,14 +321,19 @@ def process_all_edges(graph, vvv=0):
         print("[%s] did sampled choices" % graph)
 
 
-def compute_edge_stats(graph, el, vvv=0):
+def compute_edge_stats(graph, el, n_alt=5, vvv=0):
     """
     Reconstruct a graph from an edge list and for every edge, compute
     relevant context statistics of the graph when the edge was formed.
     The function returns the final graph and the list of statistics.
 
-    'graph' is an identifier or filename as a string
-    'el' is a list of (ts, from, to) tuples 
+
+    Keyword arguments:
+
+    graph -- an identifier or filename as a string
+    el -- edgelist, list of (ts, from, to) tuples
+    n_alt -- number of negative choices to sample for sampled choice data
+    vvv -- int representing level of debug output [0:none, 1:some, 2:lots]
     """
     # construct 't=0' for actual graphs based on year
     if not synth:
@@ -363,9 +368,9 @@ def compute_edge_stats(graph, el, vvv=0):
         eligible_js = set(G.nodes()) - friends
         # construct set of nodes that are eligible to be selected AND fof
         eligible_fofs = set(nx.ego_graph(G, i, 2).nodes()) - friends
-        # sample 5 negative examples and add positive example
+        # sample $n_alt negative examples and add positive example
         choices = list(eligible_js - set([j]))
-        mln_sample = np.random.choice(choices, 5, replace=True)
+        mln_sample = np.random.choice(choices, n_alt, replace=True)
         mln_sample = list(mln_sample) + [j]
         # add all fields for the current edge
         T.append({
@@ -442,12 +447,12 @@ def compute_graph_stats(G, p=0.1):
     return res
 
 
-def choice_data(id, el, max_deg=50, vvv=0):
+def choice_data(id, el, n_alt=5, max_deg=50, vvv=0):
     """
     Short hand function to compute choice set directly from an edge list.
     """
     # extract edge features from edge list
-    (G, T) = compute_edge_stats(id, el, vvv)
+    (G, T) = compute_edge_stats(id, el, n_alt=n_alt, vvv=vvv)
     # extract just the choice set data
     D = []
     for e in range(len(T)):
