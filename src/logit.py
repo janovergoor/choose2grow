@@ -298,7 +298,7 @@ class MixedLogitModel(LogitModel):
             stats.append(ll)
             T.append(stats)
             # optionally print round info
-            if self.vvv:
+            if self.vvv and i % 10 == 0:
                 msg = "[%s/%3d] " % ("%3d", n_rounds)
                 for k in range(1, K + 1):
                     msg += " (%d) pi_%d=%s u_%d=%s ll_%d=%s " % \
