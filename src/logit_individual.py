@@ -13,18 +13,49 @@ from logit import LogitModel
 """
 
 
-class DegreeLogitModel(LogitModel):
+class UniformDegreeModel(LogitModel):
+    """
+    This class represents a uniform logit model.
+    There are no parameters.
+    """
+    def __init__(self, model_id, max_deg=50, D=None, vvv=False):
+        """
+        Constructor inherits from LogitModel.
+        """
+        LogitModel.__init__(self, model_id, grouped=False, max_deg=max_deg, bounds=((1, 1), ), D=D, vvv=vvv)
+        self.model_type = 'uniform_degree'
+        self.model_short = 'ud'
+
+    def individual_likelihood(self, u):
+        """
+        Individual likelihood function of the uniform logit model.
+        Computes the likelihood for every data point (choice) separately.
+
+        L(alpha, (x,C)) = 1 / |C|
+        """
+        # pre-group
+        return np.array(1.0 / self.D.groupby('choice_id')['y'].aggregate(len))
+
+    def grad(self, u=None, w=None):
+        """
+        Placeholder gradient function of the uniform fof logit model.
+        Since there are no parameters, it always returns 0.
+        """
+        return np.array([0])
+
+
+class DegreeModel(LogitModel):
     """
     This class represents a multinomial logit model, with a
     distinct coefficient beta_i for each individual degree i.
     """
-    def __init__(self, model_id, D=None, max_deg=50, vvv=False):
+    def __init__(self, model_id, max_deg=50, D=None, vvv=False):
         """
         Constructor inherits from LogitModel.
         """
         LogitModel.__init__(self, model_id, grouped=False, D=D, max_deg=max_deg, vvv=vvv)
-        self.model_type = 'logit_degree'
-        self.model_short = 'd'
+        self.model_type = 'degree'
+        self.model_short = 'dd'
         self.u = [1] * self.d  # current parameter values
         self.se = [None] * self.d  # current SE values
 
@@ -78,21 +109,20 @@ class DegreeLogitModel(LogitModel):
         return Dd.to_frame().join(Dt.to_frame()).prob.fillna(0)
 
 
-class PolyLogitModel(LogitModel):
+class PolyDegreeModel(LogitModel):
     """
     This class represents a multinomial logit model, with a
-    polynomial functional form: u[i] = sum_d ( i^d * theta[d] )
+    polynomial transformatin of degree: u[i] = sum_d ( i^d * theta[d] )
     """
-    def __init__(self, model_id, D=None, max_deg=50, vvv=False, k=2, bounds=None):
+    def __init__(self, model_id, max_deg=50, bounds=None, D=None, vvv=False, k=2):
         """
         Constructor inherits from LogitModel.
         """
-        LogitModel.__init__(self, model_id, grouped=False, D=D, max_deg=max_deg, vvv=vvv)
-        self.model_type = 'logit_poly'
-        self.model_short = 'p'
+        LogitModel.__init__(self, model_id, grouped=False, bounds=bounds, max_deg=max_deg, D=D, vvv=vvv)
+        self.model_type = 'poly_degree'
+        self.model_short = 'p%dd' % k
         self.u = [1] * k  # current parameter values
         self.se = [None] * k  # current SE values
-        self.bounds = bounds  # bound the parameter
 
     def individual_likelihood(self, u):
         """
@@ -162,21 +192,18 @@ class PolyLogitModel(LogitModel):
         return -1 * grad
 
 
-class LogLogitModel(LogitModel):
+class LogDegreeModel(LogitModel):
     """
     This class represents a multinomial logit model, with a
     log transformation over degrees. The model has 1 parameter.
     """
-    def __init__(self, model_id, D=None, max_deg=50, vvv=False, bounds=None):
+    def __init__(self, model_id, max_deg=50, bounds=None, D=None, vvv=False):
         """
         Constructor inherits from LogitModel.
         """
-        LogitModel.__init__(self, model_id, grouped=False, D=D, max_deg=max_deg, vvv=vvv)
-        self.model_type = 'logit_log'
-        self.model_short = 'l'
-        self.u = [1]  # current parameter value
-        self.se = [None]  # current SE value
-        self.bounds = bounds  # bound the parameter
+        LogitModel.__init__(self, model_id, grouped=False, max_deg=max_deg, bounds=bounds, D=D, vvv=vvv)
+        self.model_type = 'log_degree'
+        self.model_short = 'ld'
         self.D['log_degree'] = np.log(self.D.deg + util.log_smooth)  # pre-log degree
 
     def individual_likelihood(self, u):
@@ -214,6 +241,106 @@ class LogLogitModel(LogitModel):
         choices = self.D.loc[self.D.y == 1, 'log_degree']
         # compute 'numerator score'
         self.D['nscore'] = self.D['score'] * self.D['log_degree']
+        # compute numerator
+        num = self.D.groupby('choice_id')['nscore'].aggregate(np.sum)
+        # compute denominator
+        denom = self.D.groupby('choice_id')['score'].aggregate(np.sum)
+        # weight probabilities
+        return np.array([-1 * np.sum(w * (np.array(choices) - num/denom))])
+
+
+class UniformFofModel(LogitModel):
+    """
+    This class represents a uniform logit model with only friends of friends
+    in the choice set. There are no parameters.
+    """
+    def __init__(self, model_id, max_deg=50, D=None, vvv=False):
+        """
+        Constructor inherits from LogitModel.
+        """
+        LogitModel.__init__(self, model_id, grouped=False, max_deg=max_deg, bounds=((1, 1), ), D=D, vvv=vvv)
+        self.model_type = 'uniform_fof'
+        self.model_short = 'uf'
+        # pre-compute variables
+        self.D['has'] = self.D.fof > 0  # has any FoF choices
+        self.D['choose'] = 1*(self.D['has'] & self.D.y == 1)  # chose an FoF node
+
+    def individual_likelihood(self, u):
+        """
+        Individual likelihood function of the uniform fof logit model.
+        Computes the likelihood for every data point (choice) separately.
+
+        L(alpha, (x,C)) = 1{x fof} / | #fof| if |#fof| > 0 else 1 / |C|
+        """
+        # pre-group
+        DFg = self.D.groupby('choice_id', as_index=False).agg(
+            {'has': {'n': len, 'n_fof': np.sum}, 'choose': {'y': max}})
+        # compute individual probabilities of choices
+        return np.where(DFg.has.n_fof, DFg.choose.y / DFg.has.n_fof, 1.0 / DFg.has.n)
+
+    def grad(self, u=None, w=None):
+        """
+        Placeholder gradient function of the uniform fof logit model.
+        Since there are no parameters, it always returns 0.
+        """
+        return np.array([0])
+
+
+class LogFofModel(LogitModel):
+    """
+    This class represents a multinomial logit model, with a
+    log transformation over number of friends of friends.
+    The model has 1 parameter.
+    TODO - the same constructor and data reading functions are used, which
+           user a filger with max_deg. Perhaps should consider adding a 
+           parameter for max_fof. Maybe not necessary as we're nog fitting
+           a FofLogitModel
+    """
+    def __init__(self, model_id, max_deg=50, bounds=None, D=None, vvv=False):
+        """
+        Constructor inherits from LogitModel.
+        """
+        LogitModel.__init__(self, model_id, grouped=False, D=D, bounds=bounds, max_deg=max_deg, vvv=vvv)
+        self.model_type = 'log_fof'
+        self.model_short = 'lf'
+        self.bounds = bounds  # bound the parameter
+        self.D['log_fof'] = np.log(self.D.fof + util.log_smooth)  # pre-log fof
+
+    def individual_likelihood(self, u):
+        """
+        Individual likelihood function of the log logit model.
+        Computes the likelihood for every data point (choice) separately.
+
+        L(alpha, (x,C)) = exp(alpha * log(k_x)) / sum_{y in C} exp(alpha * log(k_y))
+        """
+        # transform fof to score
+        self.D['score'] = np.exp(u * np.log(self.D.fof + util.log_smooth))
+        # compute total utility per case
+        score_tot = self.D.groupby('choice_id')['score'].aggregate(np.sum)
+        # compute probabilities of choices
+        return np.array(self.D.loc[self.D.y == 1, 'score']) / np.array(score_tot)
+
+    def grad(self, u=None, w=None):
+        """
+        Gradient function of log logit model.
+
+        grad(alpha, D) = sum_{(x,C) in D} [ alpha*ln(k_x) -
+          (sum_{y in C} ln(k_y)*exp(alpha*ln(k_y))) /
+          (sum_{y in C}         exp(alpha*ln(k_y)))
+        ]
+        """
+        # if no parameters specified, use the parameters of the object itself
+        if u is None:
+            u = self.u
+        # if no weights specified, default to 1
+        if w is None:
+            w = np.array([1] * self.n)
+        # transform fof to score
+        self.D['score'] = np.exp(u * self.D['log_fof'])
+        # take log_fof for chosen examples
+        choices = self.D.loc[self.D.y == 1, 'fof']
+        # compute 'numerator score'
+        self.D['nscore'] = self.D['score'] * self.D['fof']
         # compute numerator
         num = self.D.groupby('choice_id')['nscore'].aggregate(np.sum)
         # compute denominator

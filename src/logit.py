@@ -15,7 +15,8 @@ class LogitModel:
     """
     This class represents a generic logit model.
     """
-    def __init__(self, model_id, grouped=True, max_deg=50, N=None, C=None, D=None, vvv=0):
+    def __init__(self, model_id, grouped=True, max_deg=50, bounds=None,
+                 N=None, C=None, D=None, vvv=0):
         """
         Constructor for a LogitModel object. The data can be provided directly,
         or it can be read in from file.
@@ -70,7 +71,9 @@ class LogitModel:
 
         # initiate the rest of the parameters
         self.n_it = 0  # number of iterations for optimization
-        self.bounds = None  # whether there are bounds for the parameters
+        self.u = [1]  # current parameter value
+        self.se = [None]  # current SE value
+        self.bounds = bounds  # whether there are bounds for the parameters
 
     def ll(self, u=None, w=None):
         """
@@ -218,6 +221,17 @@ class MixedLogitModel(LogitModel):
         self.pk = {}  # class probabilities
         self.model_short = ''
 
+
+    def add_uniform_degree_model(self):
+        """
+        Add a uniform degree logit model to the list of models.
+        """
+        if self.grouped:
+            self.exception("UniformDegreeModel is not implemented for grouped data!")
+        else:
+            self.models += [UniformDegreeModel(self.id, D=self.D, max_deg=self.max_deg)]
+        self.model_short += 'ud'
+
     def add_degree_model(self):
         """
         Add a degree logit model to the list of models.
@@ -226,33 +240,54 @@ class MixedLogitModel(LogitModel):
             self.models += [DegreeLogitModelGrouped(self.id, N=self.N, C=self.C,
                                 max_deg=self.max_deg)]
         else:
-            self.models += [DegreeLogitModel(self.id, D=self.D,
+            self.models += [DegreeModel(self.id, D=self.D,
                                 max_deg=self.max_deg)]
-        self.model_short += 'd'
+        self.model_short += 'dd'
 
-    def add_log_model(self, bounds=None):
+    def add_log_degree_model(self, bounds=None):
         """
-        Add a log logit model to the list of models.
+        Add a log degree logit model to the list of models.
         """
         if self.grouped:
-            self.models += [LogLogitModelGrouped(self.id, N=self.N, C=self.C,
+            self.models += [LogDegreeModelGrouped(self.id, N=self.N, C=self.C,
                                 max_deg=self.max_deg, bounds=bounds)]
         else:
-            self.models += [LogLogitModel(self.id, D=self.D,
+            self.models += [LogDegreeModel(self.id, D=self.D,
                                 max_deg=self.max_deg, bounds=bounds)]
-        self.model_short += 'l'
+        self.model_short += 'ld'
 
-    def add_poly_model(self, k=2, bounds=None):
+    def add_poly_degree_model(self, k=2, bounds=None):
         """
-        Add a poly logit model to the list of models.
+        Add a poly degree logit model to the list of models.
         """
         if self.grouped:
-            self.models += [PolyLogitModelGrouped(self.id, N=self.N, C=self.C, k=k,
+            self.models += [PolyDegreeModelGrouped(self.id, N=self.N, C=self.C, k=k,
                                 max_deg=self.max_deg, bounds=bounds)]
         else:
-            self.models += [PolyLogitModel(self.id, D=self.D, k=k,
+            self.models += [PolyDegreeModel(self.id, D=self.D, k=k,
                                 max_deg=self.max_deg, bounds=bounds)]
-        self.model_short += 'p%d' % k
+        self.model_short += 'pd%d' % k
+
+    def add_uniform_fof_model(self):
+        """
+        Add a uniform fof logit model to the list of models.
+        """
+        if self.grouped:
+            self.exception("UniformFofModel is not implemented for grouped data!")
+        else:
+            self.models += [UniformFofModel(self.id, D=self.D, max_deg=self.max_deg)]
+        self.model_short += 'uf'
+
+    def add_log_fof_model(self, bounds=None):
+        """
+        Add a log degree logit model to the list of models.
+        """
+        if self.grouped:
+            self.exception("LogFofModel is not implemented for grouped data!")
+        else:
+            self.models += [LogFofModel(self.id, D=self.D,
+                                max_deg=self.max_deg, bounds=bounds)]
+        self.model_short += 'lf'
 
     def fit(self, n_rounds=20, etol=0.1, return_stats=False):
         """
@@ -301,8 +336,8 @@ class MixedLogitModel(LogitModel):
             if self.vvv:
                 msg = "[%s/%3d] " % ("%3d", n_rounds)
                 for k in range(1, K + 1):
-                    msg += " (%d) pi_%d=%s u_%d=%s ll_%d=%s " % \
-                           (k, k, "%.3f", k, "%.2f", k, "%.2f")
+                    msg += " (%s) pi_%d=%s u_%d=%s ll_%d=%s " % \
+                           (ms[k-1].model_short, k, "%.3f", k, "%.2f", k, "%.2f")
                 msg += " (*) tot_ll=%.4f"
                 self.message(msg % tuple(stats))
             # compute current total likelihood
@@ -313,6 +348,12 @@ class MixedLogitModel(LogitModel):
                 break
             # store new ll
             prev_ll = ll
+        # print final results
+        if self.vvv:
+            self.message("u's  = [%s]" % ', '.join(['(%s:%.3f)' %
+                         (ms[k].model_short, ms[k].u[0]) for k in range(k)]))
+            self.message("pi's = [%s]" % ', '.join(['(%s:%.3f)' %
+                         (ms[k].model_short, self.pk[k]) for k in range(k)]))
         # return the iteration stats
         if return_stats:
             # construct header
@@ -321,7 +362,6 @@ class MixedLogitModel(LogitModel):
                 header += ['p%d' % k, 'u%d' % k, 'll%d' % k]
             header += ['tot_ll']
             return pd.DataFrame(T, columns=header)
-
 
     def write_params(self):
         """

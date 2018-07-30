@@ -15,7 +15,7 @@ from scipy.misc import logsumexp
 """
 
 
-class DegreeLogitModelGrouped(LogitModel):
+class DegreeModelGrouped(LogitModel):
     """
     This class represents a multinomial logit model, with a
     distinct coefficient beta_i for each individual degree i.
@@ -72,7 +72,7 @@ class DegreeLogitModelGrouped(LogitModel):
         return np.sum(prob * w, axis=0)  # col sum
 
 
-class PolyLogitModelGrouped(LogitModel):
+class PolyDegreeModelGrouped(LogitModel):
     """
     This class represents a multinomial logit model, with a
     polynomial functional form: [i] = sum_k ( i^k * theta[i] )
@@ -81,12 +81,11 @@ class PolyLogitModelGrouped(LogitModel):
         """
         Constructor inherits from LogitModel.
         """
-        LogitModel.__init__(self, model_id, grouped=True, N=N, C=C, max_deg=max_deg, vvv=vvv)
+        LogitModel.__init__(self, model_id, grouped=True, N=N, C=C, bounds=bounds, max_deg=max_deg, vvv=vvv)
         self.model_type = 'logit_poly_group'
         self.model_short = 'p'
         self.u = [1] * k  # current parameter values
         self.se = [None] * k  # current SE values
-        self.bounds = bounds  # bound the parameter
 
     def individual_likelihood(self, u):
         """
@@ -149,7 +148,7 @@ class PolyLogitModelGrouped(LogitModel):
         return -1 * grad
 
 
-class LogLogitModelGrouped(LogitModel):
+class LogDegreeModelGrouped(LogitModel):
     """
     This class represents a multinomial logit model, with a
     log transformation over degrees. The model has 1 parameter.
@@ -158,12 +157,9 @@ class LogLogitModelGrouped(LogitModel):
         """
         Constructor inherits from LogitModel.
         """
-        LogitModel.__init__(self, model_id, grouped=True, N=N, C=C, max_deg=max_deg, vvv=vvv)
+        LogitModel.__init__(self, model_id, grouped=True, N=N, C=C, bounds=bounds, max_deg=max_deg, vvv=vvv)
         self.model_type = 'logit_log_group'
-        self.model_short = 'l'
-        self.u = [1]  # current parameter value
-        self.se = [None]  # current SE value
-        self.bounds = bounds  # bound the parameter
+        self.model_short = ''
 
     def individual_likelihood(self, u):
         """
