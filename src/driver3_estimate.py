@@ -14,12 +14,15 @@ from logit import *
 
   Possible models include:
 
-    'logit_degree_group' - separate coefficient for each degree [grouped data]
-    'logit_poly_group' - k-degree polynomial for degree [grouped data]
-    'logit_log_group'- single alpha coefficient for log(degree) [grouped data]
-    'logit_degree' - separate coefficient for each degree [individual data]
-    'logit_poly' - k-degree polynomial for degree [individual data]
-    'logit_log'- single alpha coefficient for log(degree) [individual data]
+    'degree_group' - separate coefficient for each degree [grouped data]
+    'poly_degree_group' - k-degree polynomial for degree [grouped data]
+    'log_degree_group' - single alpha coefficient for log(degree) [grouped data]
+    'degree' - separate coefficient for each degree
+    'uniform_degree' - uniform over all nodes
+    'poly_degree' - k-degree polynomial for degree
+    'log_degree' - single alpha coefficient for log(degree)
+    'uniform_fof' - uniform over friends of friends
+    'log_fof' - single alpha coefficient for log(# friends of friends)
     'mixed_logit' - probablistic combination of k of the aforementioned modes
 
   input : env.data_path/choices/
@@ -33,8 +36,9 @@ if __name__ == '__main__':
     if len(sys.argv) < 2:
         raise Exception("not enough command line arguments!")
     model = sys.argv[1]
-    if model not in ['logit_degree_group', 'logit_poly_group', 'logit_log_group',
-                     'logit_degree', 'logit_poly', 'logit_log', 'mixed_logit']:
+    if model not in ['degree_group', 'poly_degree_group', 'log_degree_group',
+                     'degree', 'uniform_degree', 'poly_degree', 'log_degree',
+                     'uniform_fof', 'log_fof', 'mixed_logit']:
         raise Exception("%s not in model list.." % model)
 
     # read available graphs to do
@@ -55,18 +59,24 @@ if __name__ == '__main__':
     # construct function to execute
     def do_one(graph):
         if 'mixed' not in model:
-            if model == 'logit_degree_group':
-                m = DegreeLogitModelGrouped(graph, vvv=1)
-            elif model == 'logit_poly_group':
-                m = PolyLogitModelGrouped(graph, vvv=1)
-            elif model == 'logit_log_group':
-                m = LogLogitModelGrouped(graph, vvv=1)
-            elif model == 'logit_degree':
-                m = DegreeLogitModel(graph, vvv=1)
-            elif model == 'logit_poly':
-                m = PolyDegreeLogitModel(graph, vvv=1)
-            elif model == 'logit_log':
-                m = LogDegreeLogitModel(graph, vvv=1)
+            if model == 'degree_group':
+                m = DegreeModelGrouped(graph, vvv=1)
+            elif model == 'poly_degree_group':
+                m = PolyDegreeModelGrouped(graph, vvv=1)
+            elif model == 'log_degree_group':
+                m = LogDegreeModelGrouped(graph, vvv=1)
+            elif model == 'degree':
+                m = DegreeModel(graph, vvv=1)
+            elif model == 'uniform_degree':
+                m = UniformDegreeModel(graph, vvv=1)
+            elif model == 'poly_degree':
+                m = PolyDegreeModel(graph, vvv=1)
+            elif model == 'log_degree':
+                m = LogDegreeModel(graph, vvv=1)
+            elif model == 'uniform_fof':
+                m = UniformFofModel(graph, vvv=1)
+            elif model == 'log_fof':
+                m = LogFofModel(graph, vvv=1)
             m.fit()
             m.write_params()
         elif model == 'mixed_logit':
