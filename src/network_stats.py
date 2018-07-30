@@ -457,9 +457,9 @@ def choice_data(id, el, n_alt=5, max_deg=50, vvv=0):
     D = []
     for e in range(len(T)):
         for (y, deg, fof) in T[e]['mln_data']:
-            D.append([e, y, deg, fof])
+            D.append([e, T[e]['j'], y, deg, fof])
     # convert to pandas DataFrame
-    D = pd.DataFrame(D, columns=['choice_id','y','deg','fof'])
+    D = pd.DataFrame(D, columns=['choice_id','node_id', 'y','deg','fof'])
     # remove too high degree choices
     D = D[D.deg <= max_deg]
     # remove cases without any choice (choice was higher than max_deg)
