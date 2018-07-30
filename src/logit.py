@@ -334,9 +334,9 @@ class MixedLogitModel(LogitModel):
             T.append(stats)
             # optionally print round info
             if self.vvv and i % 10 == 0:
-                msg = "[%s/%3d] " % ("%3d", n_rounds)
+                msg = "[%s/%3d]" % ("%3d", n_rounds)
                 for k in range(1, K + 1):
-                    msg += " (%s) pi_%d=%s u_%d=%s ll_%d=%s " % \
+                    msg += " (%s) pi_%d=%s u_%d=%s ll_%d=%s" % \
                            (ms[k-1].model_short, k, "%.3f", k, "%.2f", k, "%.2f")
                 msg += " (*) tot_ll=%.4f"
                 self.message(msg % tuple(stats))
@@ -351,9 +351,9 @@ class MixedLogitModel(LogitModel):
         # print final results
         if self.vvv:
             self.message("u's  = [%s]" % ', '.join(['(%s:%.3f)' %
-                         (ms[k].model_short, ms[k].u[0]) for k in range(k)]))
+                         (ms[k].model_short, ms[k].u[0]) for k in range(K)]))
             self.message("pi's = [%s]" % ', '.join(['(%s:%.3f)' %
-                         (ms[k].model_short, self.pk[k]) for k in range(k)]))
+                         (ms[k].model_short, self.pk[k]) for k in range(K)]))
         # return the iteration stats
         if return_stats:
             # construct header
