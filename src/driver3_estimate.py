@@ -64,9 +64,9 @@ if __name__ == '__main__':
             elif model == 'logit_degree':
                 m = DegreeLogitModel(graph, vvv=1)
             elif model == 'logit_poly':
-                m = PolyLogitModel(graph, vvv=1)
+                m = PolyDegreeLogitModel(graph, vvv=1)
             elif model == 'logit_log':
-                m = LogLogitModel(graph, vvv=1)
+                m = LogDegreeLogitModel(graph, vvv=1)
             m.fit()
             m.write_params()
         elif model == 'mixed_logit':
