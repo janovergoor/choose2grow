@@ -221,7 +221,6 @@ class MixedLogitModel(LogitModel):
         self.pk = {}  # class probabilities
         self.model_short = ''
 
-
     def add_uniform_degree_model(self):
         """
         Add a uniform degree logit model to the list of models.
@@ -289,6 +288,32 @@ class MixedLogitModel(LogitModel):
                                 max_deg=self.max_deg, bounds=bounds)]
         self.model_short += 'lf'
 
+    def ll_pi(self, uk, pk):
+        """
+        Compute log-likelihood for a specific values of (u, pi) for all k.
+        It first computes gamma weights as relative probabilities under u,
+        and then sum of the regular log likelihoods for each class.
+
+        Keyword arguments:
+
+        uk -- dictionary of u vectors for each class k
+        pk -- dictionary of class probabilities for each class k
+        """
+        ms = self.models  # shorthand
+        Ks = range(len(ms))  # number of classes
+        if sum(pk.values()) != 1:
+            self.exception("Input pi vector does not sum to 1")
+        if len(uk) != len(ms) or len(pk) != len(ms):
+            self.exception("Either uk or pk is not the same length as the number of models")
+        # compute probabilities for individual examples
+        probs = {k: ms[k].individual_likelihood(uk[k]) for k in Ks}
+        # compute numerator (for each individual, the sum of likelihoods)
+        C = [np.sum([pk[k] * probs[k][j] for k in Ks]) for j in range(self.n)]
+        # compute responsibilities by normalizing w total class probability
+        gamma = {k: (pk[k] * probs[k]) / C for k in Ks}
+        # compute total log likelihood
+        return np.sum([ms[k].ll(u=uk[k], w=gamma[k]) for k in Ks])
+
     def fit(self, n_rounds=20, etol=0.1, return_stats=False):
         """
         Fit the mixed model using a version of EM.
@@ -300,7 +325,7 @@ class MixedLogitModel(LogitModel):
         return_stats -- return a pandas DataFrame with stats for every round
         """
         ms = self.models  # shorthand
-        K = len(ms)
+        K = len(ms)  # number of classes
         T = []
         if K < 1:
             self.exception("not enough models specified for mixed model")
@@ -325,7 +350,7 @@ class MixedLogitModel(LogitModel):
                 # actually run the optimizer for current class
                 ms[k].fit(w=gamma[k])
             ll = np.sum([ms[k].ll(w=gamma[k]) for k in range(K)])
-            
+
             # gather stats for this round
             stats = [i]
             for k in range(K):
@@ -403,4 +428,3 @@ class MixedLogitModel(LogitModel):
         fn = self.id.replace('.csv', '')
         fn = '%s-%s.csv' % (fn, self.model_short)
         return fn
-
