@@ -12,7 +12,7 @@ from util import *
   * /edges - relevant network context features for every edge
   * /degree - the degree for every node
   * /choices - for every edge, complete choice set information (degree only)
-  * /choices_sampled - for every edge, sampled choice set information (degree, # fof)
+  * /choices_sampled - for every edge, sampled choice set info (degree, # fof)
 
   input : env.graphs_path/
   output: env.data_path/stats/

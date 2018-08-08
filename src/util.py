@@ -1,10 +1,8 @@
 import csv
-import networkx as nx
 import numpy as np
 import os
 import pandas as pd
 import random
-import sys
 
 from glob import glob
 from multiprocessing import Pool
@@ -213,5 +211,4 @@ def read_individual_data_single(fn, max_deg=50):
         D = D[D.groupby('choice_id')['y'].transform(np.sum) == 1]
     # read the choices
     return D
-
 

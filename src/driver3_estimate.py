@@ -16,7 +16,7 @@ from logit import *
 
     'degree_group' - separate coefficient for each degree [grouped data]
     'poly_degree_group' - k-degree polynomial for degree [grouped data]
-    'log_degree_group' - single alpha coefficient for log(degree) [grouped data]
+    'log_degree_group' - single alpha coef for log(degree) [grouped data]
     'degree' - separate coefficient for each degree
     'uniform_degree' - uniform over all nodes
     'poly_degree' - k-degree polynomial for degree
@@ -46,7 +46,7 @@ if __name__ == '__main__':
         graphs = os.listdir(data_path + "/choices")
     else:
         graphs = os.listdir(data_path + "/choices_sampled")
-    
+
     # make sure all the output folder is there
     mkdir('%s/fits' % data_path)
     mkdir('%s/fits/%s' % (data_path, model))

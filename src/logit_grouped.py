@@ -1,5 +1,4 @@
 import numpy as np
-import pandas as pd
 import util
 from logit import LogitModel
 from scipy.misc import logsumexp
