@@ -251,7 +251,7 @@ def fof_paths(G, i):
 # Stats wrapper functions
 #
 
-def process_all_edges(graph, vvv=0):
+def process_all_edges(graph, n_alt=5, vvv=0):
     """
     Read in a graph from an edge list, compute for every edge the network
     context when that edge was formed, and write out the results.
@@ -261,7 +261,7 @@ def process_all_edges(graph, vvv=0):
     # read the edge list from file
     el = read_edge_list(graph, vvv)
     # extract edge stats from the edge list
-    (G, T) = compute_edge_stats(graph, el, n_alt=5, vvv=vvv)
+    (G, T) = compute_edge_stats(graph, el, n_alt=n_alt, vvv=vvv)
     # write the different outcomes in parts
 
     # write degrees
