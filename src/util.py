@@ -66,6 +66,29 @@ def check_grad_rel(func, grad, x0, *args):
     return delta
 
 
+def manual_ll(D, alpha=1, p=0.5):
+    """
+    Manually compute the log likelihood for a model where edges are formed
+    with by preferential attachment with alpha with probability p and
+    uniformly at random with probability 1-p.
+    """
+    # preferential attachment
+    # transform degree to score
+    D['score'] = np.exp(alpha * np.log(D.deg + log_smooth))
+    # compute total utility per case
+    score_tot = D.groupby('choice_id')['score'].aggregate(np.sum)
+    # compute probabilities of choices
+    scores_pa = np.array(D.loc[D.y == 1, 'score']) / np.array(score_tot)
+    # uniform
+    scores_uniform = np.array(1.0 / D.groupby('choice_id')['y'].aggregate(len))
+    # combine stores
+    scores = p * scores_pa + (1 - p) * scores_uniform
+    # add tiny smoothing for deg=0 choices
+    scores += log_smooth
+    # return sum
+    return -1 * sum(np.log(scores))
+
+
 #
 #  Data reading functions
 #
@@ -211,4 +234,3 @@ def read_individual_data_single(fn, max_deg=50):
         D = D[D.groupby('choice_id')['y'].transform(np.sum) == 1]
     # read the choices
     return D
-
