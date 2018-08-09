@@ -41,7 +41,8 @@ def do_one_dense_cycle(id):
         for r in [0, 0.1, 0.25, 0.5, 0.75, 1]:
             fn = '%s/d-%.2f-%.2f-%.02d.csv' % (graphs_path, r, p, id)
             print(fn)
-            (G, el) = generate_mixed_model(fn, graph=Gt, n_max=ns[p], r=r, p=p, grow=False)
+            (G, el) = generate_mixed_model(fn, G_in=Gt, grow=False,
+                                           r=r, p=p, n_max=ns[p])
             write_edge_list(el, fn)
 
 
@@ -53,7 +54,8 @@ def do_one_grow_cycle(id):
         for r in [0, 0.1, 0.25, 0.5, 0.75, 1]:
             fn = '%s/g-%.2f-%.2f-%.02d.csv' % (graphs_path, r, p, id)
             print(fn)
-            (G, el) = generate_mixed_model(fn, n_max=ns[p], r=r, p=p, grow=True, m=4)
+            (G, el) = generate_mixed_model(fn, grow=True, m=4,
+                                           r=r, p=p, n_max=ns[p])
             write_edge_list(el, fn)
 
 
