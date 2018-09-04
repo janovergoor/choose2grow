@@ -201,4 +201,3 @@ class LogDegreeModelGrouped(LogitModel):
         scores = D[range(self.n), self.C] - num / denom
         # sum over rows, potentially weighted
         return -1 * np.array([np.sum(scores * w)])
-

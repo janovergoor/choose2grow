@@ -371,6 +371,7 @@ def compute_edge_stats(graph, el, n_alt=5, vvv=0):
         eligible_fofs = set(nx.ego_graph(G, i, 2).nodes()) - friends
         # sample $n_alt negative examples and add positive example
         choices = list(eligible_js - set([j]))
+        # NOTE: currently sampling with replacement
         mln_sample = np.random.choice(choices, n_alt, replace=True)
         mln_sample = list(mln_sample) + [j]
         # add all fields for the current edge

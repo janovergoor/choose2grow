@@ -185,7 +185,8 @@ class MixedLogitModel(LogitModel):
       px = x-degree poly logit
       d  = degree logit
     """
-    def __init__(self, model_id, grouped=True, max_deg=50, N=None, C=None, D=None, vvv=0):
+    def __init__(self, model_id, grouped=True, max_deg=50, N=None,
+                 C=None, D=None, rescale_samples=False, vvv=0):
         """
         Constructor for a MixedLogitModel object. It inherits from LogitModel,
         but is also composed of LogitModel modes. Like LogitModel, the data can
@@ -204,6 +205,8 @@ class MixedLogitModel(LogitModel):
             directly in grouped format (default: None)
         D -- 2d-array representing choice options, if the data is supplied
             directly in individual format (default: None)
+        rescale_samples -- boolean representing whether negative samples should
+            be rescaled. Only used with grouped=False.
         vvv -- int representing level of debug output [0:none, 1:some, 2:lots]
 
         If data is supplied directly, it can be done one of two formats:
@@ -213,7 +216,8 @@ class MixedLogitModel(LogitModel):
            choices, exactly one of which should be chosen. For every example
            we get the following covariates: [choice_id, Y, degree, n_fofs]
         """
-        LogitModel.__init__(self, model_id, grouped=grouped, max_deg=max_deg, N=N, C=C, D=D, vvv=vvv)
+        LogitModel.__init__(self, model_id, grouped=grouped, max_deg=max_deg,
+                            N=N, C=C, D=D, vvv=vvv)
         self.grouped = grouped
         self.model_type = 'mixed_logit'
         self.max_deg = max_deg
@@ -221,6 +225,7 @@ class MixedLogitModel(LogitModel):
         self.models = []  # list of models
         self.pk = {}  # class probabilities
         self.model_short = ''
+        self.rescale_samples = rescale_samples
 
     def add_uniform_degree_model(self):
         """
@@ -229,7 +234,8 @@ class MixedLogitModel(LogitModel):
         if self.grouped:
             self.exception("UniformDegreeModel is not implemented for grouped data!")
         else:
-            self.models += [UniformDegreeModel(self.id, D=self.D, max_deg=self.max_deg)]
+            self.models += [UniformDegreeModel(self.id, D=self.D, max_deg=self.max_deg,
+                                               rescale_samples=self.rescale_samples)]
         self.model_short += 'ud'
 
     def add_degree_model(self):
@@ -238,10 +244,11 @@ class MixedLogitModel(LogitModel):
         """
         if self.grouped:
             self.models += [DegreeLogitModelGrouped(self.id, N=self.N, C=self.C,
-                                max_deg=self.max_deg)]
+                                                    max_deg=self.max_deg)]
         else:
             self.models += [DegreeModel(self.id, D=self.D,
-                                max_deg=self.max_deg)]
+                                        max_deg=self.max_deg,
+                                        rescale_samples=self.rescale_samples)]
         self.model_short += 'dd'
 
     def add_log_degree_model(self, bounds=None):
@@ -253,7 +260,8 @@ class MixedLogitModel(LogitModel):
                                 max_deg=self.max_deg, bounds=bounds)]
         else:
             self.models += [LogDegreeModel(self.id, D=self.D,
-                                max_deg=self.max_deg, bounds=bounds)]
+                                           max_deg=self.max_deg, bounds=bounds,
+                                           rescale_samples=self.rescale_samples)]
         self.model_short += 'ld'
 
     def add_poly_degree_model(self, k=2, bounds=None):
@@ -265,7 +273,8 @@ class MixedLogitModel(LogitModel):
                                 max_deg=self.max_deg, bounds=bounds)]
         else:
             self.models += [PolyDegreeModel(self.id, D=self.D, k=k,
-                                max_deg=self.max_deg, bounds=bounds)]
+                                            max_deg=self.max_deg, bounds=bounds,
+                                            rescale_samples=self.rescale_samples)]
         self.model_short += 'pd%d' % k
 
     def add_uniform_fof_model(self):
@@ -275,7 +284,9 @@ class MixedLogitModel(LogitModel):
         if self.grouped:
             self.exception("UniformFofModel is not implemented for grouped data!")
         else:
-            self.models += [UniformFofModel(self.id, D=self.D, max_deg=self.max_deg)]
+            self.models += [UniformFofModel(self.id, D=self.D,
+                                            max_deg=self.max_deg,
+                                            rescale_samples=self.rescale_samples)]
         self.model_short += 'uf'
 
     def add_log_fof_model(self, bounds=None):
@@ -286,7 +297,8 @@ class MixedLogitModel(LogitModel):
             self.exception("LogFofModel is not implemented for grouped data!")
         else:
             self.models += [LogFofModel(self.id, D=self.D,
-                                max_deg=self.max_deg, bounds=bounds)]
+                                        max_deg=self.max_deg, bounds=bounds,
+                                        rescale_samples=self.rescale_samples)]
         self.model_short += 'lf'
 
     def ll_pi(self, uk, pk):

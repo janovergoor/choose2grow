@@ -234,3 +234,15 @@ def read_individual_data_single(fn, max_deg=50):
         D = D[D.groupby('choice_id')['y'].transform(np.sum) == 1]
     # read the choices
     return D
+
+
+def read_sample_counts(fn, vvv=0):
+    """
+    Read the size of the choice set from the raw edges data.
+    This is used to adjust the gradient of negative sampling for
+    the individual models.
+    """
+    path = '%s/%s/%s' % (data_path, 'edges', fn)
+    C = pd.read_csv(path)
+    C['choice_id'] = C.index.tolist()
+    return C[['choice_id','n_elig','n_elig_fof']]
