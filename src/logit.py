@@ -301,31 +301,22 @@ class MixedLogitModel(LogitModel):
                                         rescale_samples=self.rescale_samples)]
         self.model_short += 'lf'
 
-    def ll_pi(self, uk, pk):
+    def ll(self, gamma):
         """
-        Compute log-likelihood for a specific values of (u, pi) for all k.
-        It first computes gamma weights as relative probabilities under u,
-        and then sum of the regular log likelihoods for each class.
+        Compute log-likelihood for the mixture-model.
+        LL = sum_i log ( sum_k p_ik * gamma_ik)
 
         Keyword arguments:
 
-        uk -- dictionary of u vectors for each class k
-        pk -- dictionary of class probabilities for each class k
+        gamma -- dictionary of gamma vectors for each class k
         """
         ms = self.models  # shorthand
-        Ks = range(len(ms))  # number of classes
-        if sum(pk.values()) != 1:
-            self.exception("Input pi vector does not sum to 1")
-        if len(uk) != len(ms) or len(pk) != len(ms):
-            self.exception("Either uk or pk is not the same length as the number of models")
-        # compute probabilities for individual examples
-        probs = {k: ms[k].individual_likelihood(uk[k]) for k in Ks}
-        # compute numerator (for each individual, the sum of likelihoods)
-        C = [np.sum([pk[k] * probs[k][j] for k in Ks]) for j in range(self.n)]
-        # compute responsibilities by normalizing w total class probability
-        gamma = {k: (pk[k] * probs[k]) / C for k in Ks}
+        probs = [0] * self.n
+        for k in range(len(ms)):
+            # compute sum of weighted probabilities for individual examples
+            probs += ms[k].individual_likelihood(ms[k].u) * gamma[k]
         # compute total log likelihood
-        return np.sum([ms[k].ll(u=uk[k], w=gamma[k]) for k in Ks])
+        return -1 * np.sum(np.log(probs))
 
     def fit(self, n_rounds=20, etol=0.1, return_stats=False):
         """
@@ -362,8 +353,8 @@ class MixedLogitModel(LogitModel):
                 self.pk[k] = np.mean(gamma[k])
                 # actually run the optimizer for current class
                 ms[k].fit(w=gamma[k])
-            ll = np.sum([ms[k].ll(w=gamma[k]) for k in range(K)])
-
+            # compute the total mixture's likelihood
+            ll = self.ll(gamma)
             # gather stats for this round
             stats = [i]
             for k in range(K):
@@ -381,7 +372,7 @@ class MixedLogitModel(LogitModel):
             # compute current total likelihood
             delta = abs(ll - prev_ll)
             # stop if little difference
-            if delta < etol:
+            if self.vvv and delta < etol:
                 self.message("delta in ll (%.3f) < etol (%.3f), stopping" % (delta, etol))
                 break
             # store new ll
