@@ -305,7 +305,7 @@ class MixedLogitModel(LogitModel):
             # compute sum of weighted probabilities for individual examples
             probs += ms[k].individual_likelihood(ms[k].u) * gamma[k]
         # compute total log likelihood
-        return -1 * np.sum(np.log(probs))
+        return -1 * np.sum(np.log(probs + util.log_smooth))
 
     def fit(self, n_rounds=20, etol=0.1, return_stats=False):
         """

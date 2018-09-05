@@ -9,7 +9,6 @@ from logit import LogitModel
   multinomial logit models on *individual* data. The examples are
   represented as (choice_id, Y, degree, n_fofs).
 
-  TODO - incorporate / implement FOF modes
 """
 
 
