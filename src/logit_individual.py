@@ -18,16 +18,13 @@ class UniformDegreeModel(LogitModel):
     This class represents a uniform logit model.
     There are no parameters.
     """
-    def __init__(self, model_id, max_deg=50, D=None, vvv=False,
-                 rescale_samples=False):
+    def __init__(self, model_id, max_deg=50, D=None, vvv=False):
         """
         Constructor inherits from LogitModel.
         """
         LogitModel.__init__(self, model_id, grouped=False, max_deg=max_deg, bounds=((1, 1), ), D=D, vvv=vvv)
         self.model_type = 'uniform_degree'
         self.model_short = 'ud'
-        if rescale_samples and '.csv' in model_id:
-            self.C = util.read_sample_counts(model_id, vvv=vvv)
 
     def individual_likelihood(self, u):
         """
@@ -61,8 +58,7 @@ class DegreeModel(LogitModel):
     This class represents a multinomial logit model, with a
     distinct coefficient beta_i for each individual degree i.
     """
-    def __init__(self, model_id, max_deg=50, D=None, vvv=False,
-                 rescale_samples=False):
+    def __init__(self, model_id, max_deg=50, D=None, vvv=False):
         """
         Constructor inherits from LogitModel.
         """
@@ -71,12 +67,6 @@ class DegreeModel(LogitModel):
         self.model_short = 'dd'
         self.u = [1] * self.d  # current parameter values
         self.se = [None] * self.d  # current SE values
-        if rescale_samples and '.csv' in model_id:
-            # read and join in the actual number of samples
-            self.C = util.read_sample_counts(model_id, vvv=vvv)
-            self.D = self.D.join(self.C, on='choice_id', rsuffix='_')
-            # factor is (V-1) / (number of negative samples - 1)
-            self.D['C'] = (self.D.n_elig - 1) / (self.D.groupby('choice_id')['y'].transform(len) - 1)
 
     def individual_likelihood(self, u):
         """
@@ -138,8 +128,7 @@ class PolyDegreeModel(LogitModel):
     This class represents a multinomial logit model, with a
     polynomial transformatin of degree: u[i] = sum_d ( i^d * theta[d] )
     """
-    def __init__(self, model_id, max_deg=50, bounds=None, D=None,
-                 vvv=False, k=2, rescale_samples=False):
+    def __init__(self, model_id, max_deg=50, bounds=None, D=None, vvv=False, k=2):
         """
         Constructor inherits from LogitModel.
         """
@@ -148,12 +137,6 @@ class PolyDegreeModel(LogitModel):
         self.model_short = 'p%dd' % k
         self.u = [1] * k  # current parameter values
         self.se = [None] * k  # current SE values
-        if rescale_samples and '.csv' in model_id:
-            # read and join in the actual number of samples
-            self.C = util.read_sample_counts(model_id, vvv=vvv)
-            self.D = self.D.join(self.C, on='choice_id', rsuffix='_')
-            # factor is (V-1) / (number of negative samples - 1)
-            self.D['C'] = (self.D.n_elig - 1) / (self.D.groupby('choice_id')['y'].transform(len) - 1)
 
     def individual_likelihood(self, u):
         """
@@ -234,8 +217,7 @@ class LogDegreeModel(LogitModel):
     This class represents a multinomial logit model, with a
     log transformation over degrees. The model has 1 parameter.
     """
-    def __init__(self, model_id, max_deg=50, bounds=None, D=None,
-                 vvv=False, rescale_samples=False):
+    def __init__(self, model_id, max_deg=50, bounds=None, D=None, vvv=False):
         """
         Constructor inherits from LogitModel.
         """
@@ -243,12 +225,6 @@ class LogDegreeModel(LogitModel):
         self.model_type = 'log_degree'
         self.model_short = 'ld'
         self.D['log_degree'] = np.log(self.D.deg + util.log_smooth)  # pre-log degree
-        if rescale_samples and '.csv' in model_id:
-            # read and join in the actual number of samples
-            self.C = util.read_sample_counts(model_id, vvv=vvv)
-            self.D = self.D.join(self.C, on='choice_id', rsuffix='_')
-            # factor is (V-1) / (number of negative samples - 1)
-            self.D['C'] = (self.D.n_elig - 1) / (self.D.groupby('choice_id')['y'].transform(len) - 1)
 
     def individual_likelihood(self, u):
         """
@@ -304,8 +280,7 @@ class UniformFofModel(LogitModel):
     This class represents a uniform logit model with only friends of friends
     in the choice set. There are no parameters.
     """
-    def __init__(self, model_id, max_deg=50, D=None, vvv=False,
-                 rescale_samples=False):
+    def __init__(self, model_id, max_deg=50, D=None, vvv=False):
         """
         Constructor inherits from LogitModel.
         """
@@ -315,10 +290,6 @@ class UniformFofModel(LogitModel):
         # pre-compute variables
         self.D['has'] = self.D.fof > 0  # has any FoF choices
         self.D['choose'] = 1 * (self.D['has'] & self.D.y == 1)  # chose an FoF node
-        if rescale_samples and '.csv' in model_id:
-            # read and join in the actual number of samples
-            self.C = util.read_sample_counts(model_id, vvv=vvv)
-            self.D = self.D.join(self.C, on='choice_id', rsuffix='_')\
 
     def individual_likelihood(self, u):
         """
@@ -364,8 +335,7 @@ class LogFofModel(LogitModel):
            parameter for max_fof. Maybe not necessary as we're not fitting
            a FofLogitModel
     """
-    def __init__(self, model_id, max_deg=50, bounds=None, D=None,
-                 vvv=False, rescale_samples=False):
+    def __init__(self, model_id, max_deg=50, bounds=None, D=None, vvv=False):
         """
         Constructor inherits from LogitModel.
         """
@@ -374,12 +344,6 @@ class LogFofModel(LogitModel):
         self.model_short = 'lf'
         self.bounds = bounds  # bound the parameter
         self.D.loc[:,'log_fof'] = np.log(self.D.fof + util.log_smooth)  # pre-log fof
-        if rescale_samples and '.csv' in model_id:
-            # read and join in the actual number of samples
-            self.C = util.read_sample_counts(model_id, vvv=vvv)
-            self.D = self.D.join(self.C, on='choice_id', rsuffix='_')
-            # factor is (V-1) / (number of negative samples - 1)
-            self.D['C'] = (self.D.n_elig - 1) / (self.D.groupby('choice_id')['y'].transform(len) - 1)
 
     def individual_likelihood(self, u):
         """
