@@ -303,7 +303,7 @@ class MixedLogitModel(LogitModel):
         probs = [0] * self.n
         for k in range(len(ms)):
             # compute sum of weighted probabilities for individual examples
-            probs += ms[k].individual_likelihood(ms[k].u) * gamma[k]
+            probs += ms[k].individual_likelihood(ms[k].u) * self.pk[k]
         # compute total log likelihood
         return -1 * np.sum(np.log(probs + util.log_smooth))
 
@@ -359,7 +359,7 @@ class MixedLogitModel(LogitModel):
                 msg += " (*) tot_ll=%.4f"
                 self.message(msg % tuple(stats))
             # compute current total likelihood
-            delta = abs(ll - prev_ll)
+            delta = prev_ll - ll
             # stop if little difference
             if self.vvv and delta < etol:
                 self.message("delta in ll (%.3f) < etol (%.3f), stopping" % (delta, etol))
