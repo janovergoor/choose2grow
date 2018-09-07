@@ -12,7 +12,7 @@ from logit import LogitModel
 """
 
 
-class UniformDegreeModel(LogitModel):
+class UniformModel(LogitModel):
     """
     This class represents a uniform logit model.
     There are no parameters.
@@ -22,8 +22,8 @@ class UniformDegreeModel(LogitModel):
         Constructor inherits from LogitModel.
         """
         LogitModel.__init__(self, model_id, grouped=False, max_deg=max_deg, bounds=((1, 1), ), D=D, vvv=vvv)
-        self.model_type = 'uniform_degree'
-        self.model_short = 'ud'
+        self.model_type = 'uniform'
+        self.model_short = 'u'
 
     def individual_likelihood(self, u):
         """
@@ -76,9 +76,6 @@ class DegreeModel(LogitModel):
         """
         # assign exponentiated utilities to all cases
         self.D['score'] = np.exp(u)[self.D.deg]
-        # if we have read the C matrix to rescale the negative samples, use it
-        if getattr(self, 'C', None) is not None:
-            self.D.loc[self.D.y != 1, 'score'] *= self.D.loc[self.D.y != 1, 'C']
         # compute total utility per case
         score_tot = self.D.groupby('choice_id')['score'].aggregate(np.sum)
         # compute probabilities of choices
@@ -156,9 +153,6 @@ class PolyDegreeModel(LogitModel):
         powers = np.power(np.array([self.D.deg] * len(u)).T, np.arange(len(u)))
         # weight powers by coefficients
         self.D['score'] = np.sum(powers * u, axis=1)
-        # if we have read the C matrix to rescale the negative samples, use it
-        if getattr(self, 'C', None) is not None:
-            self.D.loc[self.D.y != 1, 'score'] *= self.D.loc[self.D.y != 1, 'C']
         # compute max score per choice set
         self.D['max_score'] = self.D.groupby('choice_id')['score'].transform(np.max)
         # compute exp of adjusted score
@@ -191,9 +185,6 @@ class PolyDegreeModel(LogitModel):
         powers = np.power(np.array([self.D.deg] * len(u)).T, np.arange(len(u)))
         # weight powers by coefficients, exp sum for score
         self.D['score'] = np.exp(np.sum(powers * u, axis=1))
-        # if we have read the C matrix to rescale the negative samples, use it
-        if getattr(self, 'C', None) is not None:
-            self.D.loc[self.D.y != 1, 'score'] *= self.D.loc[self.D.y != 1, 'C']
         # initialize empty gradient vector to append to
         grad = np.array([])
         # compute each k-specific gradient separately
@@ -234,9 +225,6 @@ class LogDegreeModel(LogitModel):
         """
         # transform degree to score
         self.D['score'] = np.exp(u * np.log(self.D.deg + util.log_smooth))
-        # if we have read the C matrix to rescale the negative samples, use it
-        if getattr(self, 'C', None) is not None:
-            self.D.loc[self.D.y != 1, 'score'] *= self.D.loc[self.D.y != 1, 'C']
         # compute total utility per case
         score_tot = self.D.groupby('choice_id')['score'].aggregate(np.sum)
         # compute probabilities of choices
@@ -259,9 +247,6 @@ class LogDegreeModel(LogitModel):
             w = np.array([1] * self.n)
         # transform degree to score
         self.D['score'] = np.exp(u * self.D['log_degree'])
-        # if we have read the C matrix to rescale the negative samples, use it
-        if getattr(self, 'C', None) is not None:
-            self.D.loc[self.D.y != 1, 'score'] *= self.D.loc[self.D.y != 1, 'C']
         # take log_degree for chosen examples
         choices = self.D.loc[self.D.y == 1, 'log_degree']
         # compute 'numerator score'
@@ -314,13 +299,109 @@ class UniformFofModel(LogitModel):
                 {'has': {'n': len, 'n_fof': np.sum}, 'choose': {'y': max}})
             return np.where(DFg.has.n_fof, DFg.choose.y / DFg.has.n_fof, 1.0 / DFg.has.n)
 
-
     def grad(self, u=None, w=None):
         """
         Placeholder gradient function of the uniform fof logit model.
         Since there are no parameters, it always returns 0.
         """
         return np.array([0])
+
+
+class LogDegreeFoFModel(LogitModel):
+    """
+    This class represents a multinomial logit model, with a
+    log transformation over degrees, but with only friends of friends
+    in the choice set. The model has 1 parameter.
+    """
+    def __init__(self, model_id, max_deg=50, bounds=None, D=None, vvv=False):
+        """
+        Constructor inherits from LogitModel.
+        """
+        LogitModel.__init__(self, model_id, grouped=False, max_deg=max_deg, bounds=bounds, D=D, vvv=vvv)
+        self.model_type = 'log_degree_fof'
+        self.model_short = 'ldf'
+        self.bounds = bounds  # bound the parameter
+        # pre-compute variables
+        self.D['has'] = self.D.fof > 0  # has any FoF choices
+        self.D['choose'] = 1 * (self.D['has'] & self.D.y == 1)  # chose an FoF node
+        self.D['log_degree'] = np.log(self.D.deg + util.log_smooth)  # pre-log degree
+        # if we read the C series before, use that
+        if getattr(self, 'C', None) is not None:
+            DFg = self.D.groupby('choice_id', as_index=False).agg({'n_elig_fof': {'m': max}})
+            self.elig = DFg.n_elig_fof.m  # number of eligible FoFs
+        # otherwise, use the number of samples
+        else:
+            DFg = self.D.groupby('choice_id', as_index=False).agg({'has': {'n_fof': np.sum}})
+            self.elig = DFg.has.n_fof   # number of eligible FoFs
+
+    def individual_likelihood(self, u):
+        """
+        Individual likelihood function of the log logit model, for FoFs only.
+        Computes the likelihood for every data point (choice) separately.
+        This likelihood computation is quite involved, as it is a mix between
+        the log degree model (in that it has alpha as a PA parameter),
+        and the uniform fof model (in that it considers FoFs only).
+        If there are not eligible FoFs, it considers all other nodes.
+        """
+        # 1) compute log degree scores for full choice set
+        # transform degree to score
+        self.D['score'] = np.exp(u * np.log(self.D.deg + util.log_smooth))
+        # compute total utility per case
+        score_tot = self.D.groupby('choice_id')['score'].aggregate(np.sum)
+        # compute probabilities of choices
+        scores_all = np.array(self.D.loc[self.D.y == 1, 'score']) / np.array(score_tot)
+        # 2) compute log degree scores for FoFs only
+        # set non-FoF scores to 0
+        self.D['score'] = np.where(self.D['fof'] == 0, 0, self.D['score'])
+        # compute total utility per case
+        score_tot = self.D.groupby('choice_id')['score'].aggregate(np.sum)
+        # compute probabilities of choices
+        scores_fof = np.array(self.D.loc[self.D.y == 1, 'score']) / np.array(score_tot)
+        # 3) actually construct the outcome vector, depending on the choice set
+        return np.where(self.elig, scores_fof, scores_all)
+
+    def grad(self, u=None, w=None):
+        """
+        Gradient function of log logit model, for FoFs only.
+        Like the likelihood function, it mixes the gradients for 
+        the log degree model (in that it has alpha as a PA parameter),
+        and the uniform fof model (in that it considers FoFs only).
+        If there are not eligible FoFs, it considers all other nodes.
+        """
+        # if no parameters specified, use the parameters of the object itself
+        if u is None:
+            u = self.u
+        # if no weights specified, default to 1
+        if w is None:
+            w = np.array([1] * self.n)
+
+        # 1) construct the gradients as if it was a regular log-degree model
+        # transform degree to score
+        self.D['score'] = np.exp(u * self.D['log_degree'])
+        # take log_degree for chosen examples
+        choices = self.D.loc[self.D.y == 1, 'log_degree']
+        # compute 'numerator score'
+        self.D['nscore'] = self.D['score'] * self.D['log_degree']
+        # compute numerator
+        num = self.D.groupby('choice_id')['nscore'].aggregate(np.sum)
+        # compute denominator
+        denom = self.D.groupby('choice_id')['score'].aggregate(np.sum)
+        grads_all = np.array(choices) - num/denom
+
+        # 2) construct the gradients for FoF choices only
+        # set non-FoF scores to 0
+        self.D['score'] = np.where(self.D['fof'] == 0, 0, self.D['score'])
+        # compute 'numerator score'
+        self.D['nscore'] = self.D['score'] * self.D['log_degree']
+        # compute numerator
+        num = self.D.groupby('choice_id')['nscore'].aggregate(np.sum)
+        # compute denominator
+        denom = self.D.groupby('choice_id')['score'].aggregate(np.sum)
+        grads_fof = np.array(choices) - num/denom
+
+        # actually construct the individual gradient vector, depending on the choice set,
+        # and weight the samples
+        return np.array([-1 * np.sum(w * np.where(self.elig, grads_fof, grads_all))])
 
 
 class LogFofModel(LogitModel):
@@ -353,9 +434,6 @@ class LogFofModel(LogitModel):
         """
         # transform fof to score
         self.D['score'] = np.exp(u * self.D['log_fof'])
-        # if we have read the C matrix to rescale the negative samples, use it
-        if getattr(self, 'C', None) is not None:
-            self.D.loc[self.D.y != 1, 'score'] *= self.D.loc[self.D.y != 1, 'C']
         # compute total utility per case
         score_tot = self.D.groupby('choice_id')['score'].aggregate(np.sum)
         # compute probabilities of choices

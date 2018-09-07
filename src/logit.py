@@ -224,15 +224,15 @@ class MixedLogitModel(LogitModel):
         self.pk = {}  # class probabilities
         self.model_short = ''
 
-    def add_uniform_degree_model(self):
+    def add_uniform_model(self):
         """
         Add a uniform degree logit model to the list of models.
         """
         if self.grouped:
-            self.exception("UniformDegreeModel is not implemented for grouped data!")
+            self.exception("UniformModel is not implemented for grouped data!")
         else:
-            self.models += [UniformDegreeModel(self.id, D=self.D, max_deg=self.max_deg)]
-        self.model_short += 'ud'
+            self.models += [UniformModel(self.id, D=self.D, max_deg=self.max_deg)]
+        self.model_short += 'u'
 
     def add_degree_model(self):
         """
@@ -278,6 +278,17 @@ class MixedLogitModel(LogitModel):
         else:
             self.models += [UniformFofModel(self.id, D=self.D, max_deg=self.max_deg)]
         self.model_short += 'uf'
+
+    def add_log_fof_model(self, bounds=None):
+        """
+        Add a log degree fof logit model to the list of models.
+        """
+        if self.grouped:
+            self.exception("LogDegreeFoFModel is not implemented for grouped data!")
+        else:
+            self.models += [LogDegreeFoFModel(self.id, D=self.D,
+                                        max_deg=self.max_deg, bounds=bounds)]
+        self.model_short += 'ldf'
 
     def add_log_fof_model(self, bounds=None):
         """
@@ -347,15 +358,15 @@ class MixedLogitModel(LogitModel):
             # gather stats for this round
             stats = [i]
             for k in range(K):
-                stats += [self.pk[k], ms[k].u[0], ms[k].ll(w=gamma[k])]
+                stats += [self.pk[k], ms[k].u[0]]
             stats.append(ll)
             T.append(stats)
             # optionally print round info
             if self.vvv and i % 10 == 0:
                 msg = "[%s/%3d]" % ("%3d", n_rounds)
                 for k in range(1, K + 1):
-                    msg += " (%s) pi_%d=%s u_%d=%s ll_%d=%s" % \
-                           (ms[k-1].model_short, k, "%.3f", k, "%.2f", k, "%.2f")
+                    msg += " (%s) pi_%d=%s u_%d=%s" % \
+                           (ms[k-1].model_short, k, "%.3f", k, "%.2f")
                 msg += " (*) tot_ll=%.4f"
                 self.message(msg % tuple(stats))
             # compute current total likelihood
@@ -377,7 +388,7 @@ class MixedLogitModel(LogitModel):
             # construct header
             header = ['i']
             for k in range(1, K + 1):
-                header += ['p%d' % k, 'u%d' % k, 'll%d' % k]
+                header += ['p%d' % k, 'u%d' % k]
             header += ['tot_ll']
             return pd.DataFrame(T, columns=header)
 
