@@ -279,7 +279,7 @@ class MixedLogitModel(LogitModel):
             self.models += [UniformFofModel(self.id, D=self.D, max_deg=self.max_deg)]
         self.model_short += 'uf'
 
-    def add_log_fof_model(self, bounds=None):
+    def add_log_degree_fof_model(self, bounds=None):
         """
         Add a log degree fof logit model to the list of models.
         """
