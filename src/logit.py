@@ -301,16 +301,16 @@ class MixedLogitModel(LogitModel):
                                         max_deg=self.max_deg, bounds=bounds)]
         self.model_short += 'lf'
 
-    def ll(self, gamma):
+    def ll(self):
         """
         Compute log-likelihood for the mixture-model.
-        LL = sum_i log ( sum_k p_ik * gamma_ik)
-
-        Keyword arguments:
-
-        gamma -- dictionary of gamma vectors for each class k
+        LL = sum_i log ( sum_k p_ik * p_k)
         """
         ms = self.models  # shorthand
+        K = len(ms)
+        # initiate class probabilities if not already
+        if len(self.pk) == 0:
+            self.pk = {k: 1.0 / K for k in range(K)}
         probs = [0] * self.n
         for k in range(len(ms)):
             # compute sum of weighted probabilities for individual examples
@@ -354,7 +354,7 @@ class MixedLogitModel(LogitModel):
                 # actually run the optimizer for current class
                 ms[k].fit(w=gamma[k])
             # compute the total mixture's likelihood
-            ll = self.ll(gamma)
+            ll = self.ll()
             # gather stats for this round
             stats = [i]
             for k in range(K):
