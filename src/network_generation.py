@@ -89,6 +89,8 @@ def generate_mixed_model(id, G_in=None, n_max=100, r=0.5, p=0.5, grow=True,
                     j = random_sample(nx.neighbors(G, k))
             else:
                 if P < p:
+                    # old method - sample according to # paths between i,j
+                    """
                     # random sample from i's friends
                     k = random_sample(nx.neighbors(G, i))
                     if k is None:
@@ -96,6 +98,11 @@ def generate_mixed_model(id, G_in=None, n_max=100, r=0.5, p=0.5, grow=True,
                     else:
                         # random sample from k's friends
                         j = random_sample(nx.neighbors(G, k))
+                    """
+                    # sample according to j's degree
+                    ds = dict(G.degree(eligible_fofs))
+                    ps = [float(x) / sum(ds.values()) for x in ds.values()]
+                    j = np.random.choice(ds.keys(), size=1, p=ps)
                 else:
                     # random sample from i's friend of friends
                     j = random_sample(eligible_fofs)
