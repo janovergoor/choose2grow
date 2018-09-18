@@ -4,14 +4,14 @@ author: "overgoor"
 params:
   date: "Sys.Date()"
 output:
+  pdf_document:
+    toc: yes
+    toc_depth: '2'
   html_document:
     code_folding: hide
     self_contained: yes
     toc: yes
     toc_depth: 2
-  pdf_document:
-    toc: yes
-    toc_depth: '2'
 ---
 
 ```{r setup, include=FALSE}
@@ -147,11 +147,29 @@ rbind(
 ```{r plot_timeline}
 # timeline of citations
 edges %>% 
-  filter(cites=='`a64bbd7a-f593-4e50-8848-4a8e43cae482`') %>%
+  filter(cites=='a64bbd7a-f593-4e50-8848-4a8e43cae482') %>%
   group_by(year_cited) %>% summarize(n=n()) %>%
   arrange(year_cited) %>%
   ggplot(aes(year_cited, n)) + geom_point() + geom_line() +
     ggtitle("Citations for a64bbd7a-f593-4e50-8848-4a8e43cae482") +
     xlab("Year") + ylab("Number of citations") +
     my_theme()
+```
+
+
+# Model
+
+* `log(degree)`
+* has same author
+* years since publication
+
+
+```{r, eval=F}
+library(mlogit)
+d = read_csv("~/projects/choosing_to_grow/data/choices_sampled/g-0.50-1.00-00.csv") %>%
+  group_by(choice_id) %>% mutate(alt_id = row_number()) %>% mutate(has_fof=fof>0)
+H <- mlogit.data(d, shape="long", choice="y", alt.var='alt_id', varying=c(3:4,6))
+m <- mlogit(y ~ log(deg) + has_fof | 0, H)
+summary(m)
+
 ```
