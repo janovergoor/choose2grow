@@ -16,7 +16,7 @@ output:
 
 ```{r setup, include=FALSE}
 library(knitr)
-knitr::opts_chunk$set(echo=TRUE, warning=FALSE, cache=TRUE, message=FALSE, fig.width=7, fig.height=4)
+knitr::opts_chunk$set(echo=F, warning=F, cache=T, message=F, fig.width=6, fig.height=3)
 suppressPackageStartupMessages(library('ggplot2'))
 ggplot2::theme_set(theme_minimal())
 library(tidyr)
@@ -53,7 +53,7 @@ my_theme <- function(base_size=10) {
 # Read Data
 
 ```{r data}
-d_mat = read_csv("~/choosing_to_grow/data_academic/processed/mag_net.txt", col_types='cccddcc')
+d_mat = read_csv("~/choosing_to_grow/data_academic/processed/mag_cli.txt", col_types='cccddcc')
 # explode citations into edges
 edges = d_mat %>%
   separate_rows(references, sep=',') %>%
@@ -65,7 +65,7 @@ edges = d_mat %>%
 
 ## Role of Year
 
-```{r plot_dist_time}
+```{r plot_dist_time1}
 # distribution of when papers are published
 d_mat %>%
   group_by(year) %>% summarize(n=n()) %>%
@@ -74,11 +74,15 @@ d_mat %>%
     scale_y_continuous("# papers") +
     ggtitle("Number of papers per year") +
     my_theme()
+```
 
+_ _ 
+
+```{r plot_dist_time2}
 # distribution of time between a papers publishing year and year of citation
 edges %>%
   mutate(delta=year_cited-year_published) %>% 
-  mutate(delta=ifelse(delta < 0, NA, ifelse(delta > 20, 20, delta))) %>%
+  mutate(delta=ifelse(delta < 0, NA, ifelse(delta > 40, 40, delta))) %>%
   group_by(delta) %>% summarize(n=n()) %>%
   filter(!is.na(delta)) %>%
   ggplot(aes(delta, n)) + geom_line() +
@@ -100,7 +104,7 @@ DF = inner_join(d_mat,
   filter(!is.na(id))
 ```
 
-```{r plot_coverage}
+```{r plot_coverage_scatter, eval=F}
 # scatter
 ggplot(DF, aes(n_citation, n_citation_data)) + geom_point(alpha=0.2) +
   scale_x_log10("(log) # citations (stated)") +
@@ -108,7 +112,9 @@ ggplot(DF, aes(n_citation, n_citation_data)) + geom_point(alpha=0.2) +
   geom_line(data=data.frame(x=10:10000), aes(x, x), color='blue') + 
   ggtitle("Citations - Stated vs Observed (individual)") +
   my_theme()
+```
 
+```{r plot_coverage_group}
 # grouped
 DF %>% group_by(n_citation) %>% summarize(stat=mean(n_citation_data)) %>%
   ggplot(aes(n_citation, stat)) + geom_line() + #geom_point(alpha=0.2) +
@@ -117,7 +123,9 @@ DF %>% group_by(n_citation) %>% summarize(stat=mean(n_citation_data)) %>%
     geom_line(data=data.frame(x=10:10000), aes(x, x), color='blue') + 
     ggtitle("Citations - Stated vs Observed (grouped)") +
     my_theme()
+```
 
+```{r plot_coverage_density}
 # density
 ggplot(DF, aes(p_citation_data)) + geom_density() +
   scale_x_continuous("Share of citations") +
@@ -162,7 +170,17 @@ edges %>%
 * `log(degree)`
 * has same author
 * years since publication
+* number of fields overlap?
 
+
+```{r model_data}
+edges %>%
+  # only look at citations within dataset
+  filter(!is.na(year_published)) %>%
+  sample_n(100) %>%
+  left_join(d_mat %>% select(id, authors, year, lang)) %>%
+  select(paper_id=id, paper_year=year, paper_authors=authors, paper_lang=lang, choice_id=cites, choice_year=year_cited) 
+```
 
 ```{r, eval=F}
 library(mlogit)
@@ -171,5 +189,10 @@ d = read_csv("~/projects/choosing_to_grow/data/choices_sampled/g-0.50-1.00-00.cs
 H <- mlogit.data(d, shape="long", choice="y", alt.var='alt_id', varying=c(3:4,6))
 m <- mlogit(y ~ log(deg) + has_fof | 0, H)
 summary(m)
+```
+
+
+```{r}
+list.files("~/projects/choosing_to_grow/data/choices_sampled/")
 
 ```
