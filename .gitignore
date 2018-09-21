@@ -2,5 +2,7 @@
 *.csv
 *.html
 *.pyc
+*.tar.gz
+*_old
 env*
 .ipynb_checkpoints

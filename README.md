@@ -1,10 +1,16 @@
 # Choosing to Grow a Graph
 
-Research code for "Choosing to grow a graph" project. Contains code for network generation and model estimation.
+This code and data repository accompanies the paper
 
-The steps are as follows:
+- [Choosing to grow a graph](..). Jan Overgoor, Austin R. Benson, Johan Ugander. 2018.
 
-1. Generate synthetic graphs with `driver1_generate.py`. This generates 100 graphs for each (r, p) combination, and writes them to `graphs_path`, as defined in `env.py`.
-2. Extract, for each edge, the relevant network context with `driver2_process.py`.
-3. Fit multinomial logit models with `driver3_estimate.py`.
+For questions, please email Jan at overgoor@stanford.edu.
 
+The code for fitting logit models, as well as the code to generate the synthetic graphs for section 4.1, are both written in Python 3. The code for creating the graphs is written in R.
+
+To reproduce the results from the paper, follow these steps (from the `/src` folder):
+
+1. Generate synthetic graphs with `python generate.py`. This generates 10 graphs for each (r, p) combination, and writes them to `graphs_path`, as defined in `env.py`.
+2. Extract, for each edge, the relevant choice data with `python process.py`. The choice set data is written to `data_path` as defined in `env.py`.
+3. Run the analysis code with `python analyze.py > ../results/r_vs_p_synth.csv`.
+4. Run the plot code with `Rscript make_plots.R`.
