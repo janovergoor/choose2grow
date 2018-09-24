@@ -1,5 +1,5 @@
 ---
-title: "MAG - 'Computer networks'"
+title: "MAG - 'Climatology'"
 author: "overgoor"
 params:
   date: "Sys.Date()"
@@ -22,6 +22,8 @@ ggplot2::theme_set(theme_minimal())
 library(tidyr)
 library(dplyr)
 library(readr)
+library(mlogit)
+library(stringr)
 ```
 
 ```{r}
@@ -53,12 +55,12 @@ my_theme <- function(base_size=10) {
 # Read Data
 
 ```{r data}
-d_mat = read_csv("~/choosing_to_grow/data_academic/processed/mag_cli.txt", col_types='cccddcc')
+d_raw = read_csv("~/choosing_to_grow/data_academic/processed/mag_cli.txt", col_types='cccddccc')
 # explode citations into edges
-edges = d_mat %>%
+edges = d_raw %>%
   separate_rows(references, sep=',') %>%
   select(id, cites=references, year_cited=year) %>%
-  left_join(d_mat %>% select(cites=id, year_published=year))
+  left_join(d_raw %>% select(cites=id, year_published=year))
 ```
 
 # Plots
@@ -67,7 +69,7 @@ edges = d_mat %>%
 
 ```{r plot_dist_time1}
 # distribution of when papers are published
-d_mat %>%
+d_raw %>%
   group_by(year) %>% summarize(n=n()) %>%
   ggplot(aes(year, n)) + geom_line() +
     scale_x_continuous("Year", limits=c(1980,2020)) +
@@ -96,7 +98,7 @@ edges %>%
 
 ```{r data_coverage}
 # how many of the citations in "n_citation" do we actually observe in the data?
-DF = inner_join(d_mat,
+DF = inner_join(d_raw,
            edges %>% group_by(cites) %>% summarize(n_citation_data=n()),
            by=c('id'='cites')) %>%
   select(id, n_citation, n_citation_data) %>%
@@ -133,6 +135,7 @@ ggplot(DF, aes(p_citation_data)) + geom_density() +
   my_theme()
 ```
 
+
 ## Degree distribution
 
 ```{r plot_degdist}
@@ -150,16 +153,42 @@ rbind(
 ```
 
 
+## Author distribution
+
+```{r plot_authdist, fig.width=4, fig.height=3}
+d_raw %>% select(authors) %>%
+  separate_rows(authors, sep=',') %>%
+  group_by(authors) %>% summarize(n_papers=n()) %>%
+  group_by(n_papers) %>% summarize(n=n()) %>%
+  ggplot(aes(n_papers, n)) + geom_point() +
+    ggtitle("Distribution of number of papers/author") +
+    scale_x_log10("(log) Number of papers") +
+    scale_y_log10("(log) Number of Authors") +
+    my_theme()
+```
+
+## Keyword distribution
+
+```{r plot_keydist}
+d_raw %>% select(keywords) %>%
+  separate_rows(keywords, sep=',') %>%
+  mutate(keyword=keywords) %>% filter(!is.na(keyword)) %>%
+  group_by(keywords) %>% summarize(n=n()) %>%
+  arrange(-n) %>% head(n=10) %>%
+  kable(format='markdown')
+```
+
+
 ## Individual paper's timeline
 
 ```{r plot_timeline}
 # timeline of citations
 edges %>% 
-  filter(cites=='a64bbd7a-f593-4e50-8848-4a8e43cae482') %>%
+  filter(cites=='9c024621-3fbb-411d-ae8c-984585f98221') %>%
   group_by(year_cited) %>% summarize(n=n()) %>%
   arrange(year_cited) %>%
   ggplot(aes(year_cited, n)) + geom_point() + geom_line() +
-    ggtitle("Citations for a64bbd7a-f593-4e50-8848-4a8e43cae482") +
+    ggtitle("Citations for 9c024621-3fbb-411d-ae8c-984585f98221") +
     xlab("Year") + ylab("Number of citations") +
     my_theme()
 ```
@@ -167,32 +196,101 @@ edges %>%
 
 # Model
 
-* `log(degree)`
-* has same author
-* years since publication
-* number of fields overlap?
+Data construction process:
+
+* sample 1000 citations
+* for each actual citation, sample 24 non-cited papers (from before publication date)
+* for each of the (paper,option) pairs, compute features (n citations, years since, has same author)
 
 
-```{r model_data}
-edges %>%
+```{r model_data_1}
+set.seed(100)
+## sample actual choices
+dm1 <- edges %>%
   # only look at citations within dataset
-  filter(!is.na(year_published)) %>%
-  sample_n(100) %>%
-  left_join(d_mat %>% select(id, authors, year, lang)) %>%
-  select(paper_id=id, paper_year=year, paper_authors=authors, paper_lang=lang, choice_id=cites, choice_year=year_cited) 
-```
-
-```{r, eval=F}
-library(mlogit)
-d = read_csv("~/projects/choosing_to_grow/data/choices_sampled/g-0.50-1.00-00.csv") %>%
-  group_by(choice_id) %>% mutate(alt_id = row_number()) %>% mutate(has_fof=fof>0)
-H <- mlogit.data(d, shape="long", choice="y", alt.var='alt_id', varying=c(3:4,6))
-m <- mlogit(y ~ log(deg) + has_fof | 0, H)
-summary(m)
+  filter(!is.na(year_published), year_published < year_cited, year_cited==2014) %>%
+  sample_n(1000) %>%
+  mutate(y=1) %>%
+  select(paper_id=id, paper_year=year_cited, option_id=cites, option_year=year_published, y)
 ```
 
 
-```{r}
-list.files("~/projects/choosing_to_grow/data/choices_sampled/")
+```{r model_data_2}
+## sample reduced choice sets
+dm2 <- dm1 %>%
+  mutate(t='x') %>%
+  select(paper_id, paper_year, t) %>%
+  # cross join with all possible choices to create full choice set
+  full_join(d_raw %>%
+              filter(year > 1930) %>%
+              select(option_id=id, option_year=year) %>%
+              #sample_n(1000) %>%
+              mutate(t='x'), by='t') %>%
+  filter(option_year < paper_year) %>%
+  # sample only 20 choices for reduced choice set
+  group_by(paper_id) %>% sample_n(24) %>% ungroup() %>%
+  mutate(y=0) %>% select(paper_id, paper_year, option_id, option_year, y) %>%
+  # make sure they weren't actually cited..
+  left_join(edges, by=c("paper_id"="id","option_id"="cites")) %>%
+  filter(is.na(year_cited)) %>% select(-year_cited, -year_published)
+```
 
+
+```{r model_data_3}
+# helper function to count number of overlapping items in comma-separated list string
+str_overlap <- Vectorize(function(s1, s2) {
+  #l1 = lapply(str_split(s1, ',')[[1]], function(x) { y = str_split(tolower(x), ' ')[[1]]; sprintf('%s_%s', str_sub(y[1], 1, 1), y[length(y)]) })
+  #l2 = lapply(str_split(s2, ',')[[1]], function(x) { y = str_split(tolower(x), ' ')[[1]]; sprintf('%s_%s', str_sub(y[1], 1, 1), y[length(y)]) })
+  #intersect(l1, l2) %>% length() > 0
+  intersect(str_split(s1, ',')[[1]], str_split(s2, ',')[[1]]) %>% length()
+})
+
+dm3 <- rbind(dm1, dm2)
+
+## Compute features
+DM <- dm3 %>%
+  # n_citations
+  left_join(
+    # compute number of citations **at time of choosing papers' publishing**
+    inner_join(dm3, edges %>% select(cites, year_cited), by=c('option_id'='cites')) %>%
+      filter(paper_year > year_cited) %>%
+      group_by(paper_id, option_id) %>% summarize(n_citations=n()),
+    by=c('paper_id','option_id')
+  ) %>%
+  mutate(n_citations=ifelse(is.na(n_citations), 0, n_citations)) %>%
+  # years between
+  mutate(delta_years = paper_year - option_year) %>%
+  # overlapping authors
+  left_join(
+    dm3 %>% select(paper_id, option_id) %>%
+      left_join(d_raw %>% select(id, a=authors), by=c('paper_id' ='id')) %>%
+      left_join(d_raw %>% select(id, b=authors), by=c('option_id'='id')) %>%
+      mutate(has_same_author=ifelse(str_overlap(a, b) > 0, 1, 0)) %>% select(-a, -b),
+    by=c('paper_id','option_id')
+  ) %>%
+  # overlapping keywords
+  left_join(
+    dm3 %>% select(paper_id, option_id) %>%
+      left_join(d_raw %>% select(id, a=keywords), by=c('paper_id' ='id')) %>%
+      left_join(d_raw %>% select(id, b=keywords), by=c('option_id'='id')) %>%
+      mutate(n_same_keywords=str_overlap(a, b)) %>% select(-a, -b),
+    by=c('paper_id','option_id')
+  )
+
+H <- DM %>% 
+  group_by(paper_id) %>% mutate(alt_id=row_number()) %>% ungroup() %>%
+  select(paper_id, alt_id, y, n_citations, delta_years, has_same_author, n_same_keywords) %>% as.data.frame() %>%
+  mlogit.data(shape="long", chid.var='paper_id', choice="y", alt.var='alt_id', varying=c(4:7))
+```
+
+
+```{r model_model}
+stargazer::stargazer(
+  #mlogit(y ~ n_citations | 0, H),
+  mlogit(y ~ log(n_citations+1) | 0, H),
+  #mlogit(y ~ log(n_citations+1) + delta_years | 0, H),
+  mlogit(y ~ log(n_citations+1) + log(delta_years) | 0, H),
+  mlogit(y ~ log(n_citations+1) + log(delta_years) + has_same_author | 0, H),
+  mlogit(y ~ log(n_citations+1) + log(delta_years) + has_same_author + n_same_keywords| 0, H),  
+  type='text')
 ```
