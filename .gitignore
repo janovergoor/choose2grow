@@ -4,5 +4,7 @@
 *.pyc
 *_files*
 *_cache*
+*.tar.gz
+*_old
 env*
 .ipynb_checkpoints
