@@ -1,12 +1,11 @@
 ---
 title: "MAG - 'Climatology'"
-author: "overgoor"
+author: "Jan Overgoor"
 params:
   date: "Sys.Date()"
 output:
   pdf_document:
-    toc: yes
-    toc_depth: '2'
+    toc: no
   html_document:
     code_folding: hide
     self_contained: yes
@@ -16,7 +15,7 @@ output:
 
 ```{r setup, include=FALSE}
 library(knitr)
-knitr::opts_chunk$set(echo=F, warning=F, cache=T, message=F, fig.width=6, fig.height=3)
+knitr::opts_chunk$set(echo=F, warning=F, cache=T, message=F, fig.width=6, fig.height=2.5)
 suppressPackageStartupMessages(library('ggplot2'))
 ggplot2::theme_set(theme_minimal())
 library(tidyr)
@@ -52,49 +51,45 @@ my_theme <- function(base_size=10) {
 }
 ```
 
-# Read Data
-
 ```{r data}
 d_raw = read_csv("~/choosing_to_grow/data_academic/processed/mag_cli.txt", col_types='cccddccc')
 # explode citations into edges
 edges = d_raw %>%
   separate_rows(references, sep=',') %>%
   select(id, cites=references, year_cited=year) %>%
-  left_join(d_raw %>% select(cites=id, year_published=year))
+  left_join(d_raw %>% select(cites=id, year_published=year), by='cites')
 ```
 
-# Plots
+We start with some exploratory plots.
 
-## Role of Year
-
-```{r plot_dist_time1}
-# distribution of when papers are published
-d_raw %>%
-  group_by(year) %>% summarize(n=n()) %>%
-  ggplot(aes(year, n)) + geom_line() +
-    scale_x_continuous("Year", limits=c(1980,2020)) +
-    scale_y_continuous("# papers") +
-    ggtitle("Number of papers per year") +
-    my_theme()
+```{r plot_dist_time}
+Rmisc::multiplot(
+  # distribution of when papers are published
+  d_raw %>%
+    group_by(year) %>% summarize(n=n()) %>%
+    ggplot(aes(year, n)) + geom_line() +
+      scale_x_continuous("Year", limits=c(1980,2020)) +
+      scale_y_continuous("# papers") +
+      ggtitle("Number of papers per year") +
+      my_theme(),
+  # distribution of time between a papers publishing year and year of citation
+  edges %>%
+    mutate(delta=year_cited-year_published) %>% 
+    mutate(delta=ifelse(delta < 0, NA, ifelse(delta > 40, 40, delta))) %>%
+    group_by(delta) %>% summarize(n=n()) %>%
+    filter(!is.na(delta)) %>%
+    ggplot(aes(delta, n)) + geom_line() +
+      scale_x_continuous("Delta (years)") +
+      scale_y_continuous("# papers") +
+      ggtitle("Distribution of Years to citation") +
+      my_theme() + theme(axis.title.y=element_blank()),
+  cols=2)
 ```
 
-_ _ 
+* Left: number of papers per year, linear increase since 2000, drop for recent years
+* Right: distribution of years between publication and getting cited. Most citations happen within 2-3 years of publication.
 
-```{r plot_dist_time2}
-# distribution of time between a papers publishing year and year of citation
-edges %>%
-  mutate(delta=year_cited-year_published) %>% 
-  mutate(delta=ifelse(delta < 0, NA, ifelse(delta > 40, 40, delta))) %>%
-  group_by(delta) %>% summarize(n=n()) %>%
-  filter(!is.na(delta)) %>%
-  ggplot(aes(delta, n)) + geom_line() +
-    scale_x_continuous("Delta (years)") +
-    scale_y_continuous("# papers") +
-    ggtitle("Distribution of Years to citation") +
-    my_theme()
-```
-
-## Share of citations observed
+Next, we compare the stated number of citations to the amount we can actually find in the data. 
 
 ```{r data_coverage}
 # how many of the citations in "n_citation" do we actually observe in the data?
@@ -105,40 +100,33 @@ DF = inner_join(d_raw,
   mutate(p_citation_data=n_citation_data/n_citation) %>%
   filter(!is.na(id))
 ```
-
-```{r plot_coverage_scatter, eval=F}
-# scatter
-ggplot(DF, aes(n_citation, n_citation_data)) + geom_point(alpha=0.2) +
-  scale_x_log10("(log) # citations (stated)") +
-  scale_y_log10("# citations (observed)") +
-  geom_line(data=data.frame(x=10:10000), aes(x, x), color='blue') + 
-  ggtitle("Citations - Stated vs Observed (individual)") +
-  my_theme()
+```{r plot_coverage}
+Rmisc::multiplot(
+  # density
+  ggplot(DF, aes(p_citation_data)) + geom_density() +
+    scale_x_continuous("Share of citations") +
+    ggtitle("Share of stated citations observed") +
+    my_theme(),
+  # grouped
+  DF %>% group_by(n_citation) %>% summarize(stat=mean(p_citation_data)) %>%
+    ggplot(aes(n_citation, stat)) + geom_line() +
+      scale_x_log10("(log) # citations (stated)", limits=c(40, 8000)) +
+      scale_y_continuous("Share of citations observed") +
+      #scale_y_log10("# citations (observed)") +
+      #geom_line(data=data.frame(x=10:10000), aes(x, x), color='blue') + 
+      ggtitle("Citations - Stated vs Observed") +
+      my_theme(),
+  cols=2
+)
 ```
 
-```{r plot_coverage_group}
-# grouped
-DF %>% group_by(n_citation) %>% summarize(stat=mean(n_citation_data)) %>%
-  ggplot(aes(n_citation, stat)) + geom_line() + #geom_point(alpha=0.2) +
-    scale_x_log10("(log) # citations (stated)") +
-    scale_y_log10("# citations (observed)") +
-    geom_line(data=data.frame(x=10:10000), aes(x, x), color='blue') + 
-    ggtitle("Citations - Stated vs Observed (grouped)") +
-    my_theme()
-```
+* Left: distribution of "share of stated observations observed", for mostly papers this is <25%. Since I look at the graph filtered by field of study, citing papers might not be included. The whole graph is hard to work with, so this is what we got.
+* Right: per "stated number of citations", what is the average "share of citations observed"? Very stable by x, with a much higher variance for the highly cited papers (as there are fewer of them).
 
-```{r plot_coverage_density}
-# density
-ggplot(DF, aes(p_citation_data)) + geom_density() +
-  scale_x_continuous("Share of citations") +
-  ggtitle("Share of stated citations observed") +
-  my_theme()
-```
+\newpage
+Are the degree distributions similar for the stated and observed citation counts?
 
-
-## Degree distribution
-
-```{r plot_degdist}
+```{r plot_degdist, fig.height=3}
 # degree distribution
 rbind(
     DF %>% mutate(stat=n_citation) %>% filter(stat > 50) %>% group_by(stat) %>% summarize(n=n()) %>% mutate(g='Stated'),
@@ -152,22 +140,54 @@ rbind(
     my_theme()
 ```
 
+Yes, and this shows the censoring at 50 very clearly.
 
-## Author distribution
+**TODO**: fit $\alpha$?
 
-```{r plot_authdist, fig.width=4, fig.height=3}
+```{r plot citations_time}
+Rmisc::multiplot(
+  edges %>%
+    filter(year_published > 1950) %>%
+    group_by(cites, year_published) %>% summarize(n=n()) %>%
+    group_by(year_published) %>% summarize(n_citation=mean(n, na.rm=T)) %>%
+    ggplot(aes(year_published, n_citation)) + geom_point() + #geom_line() +
+      scale_y_continuous("Avg # citations") +
+      scale_x_continuous("Year published") +
+      ggtitle("Citations by Age (observed)") +
+      coord_cartesian(ylim=c(0, 30)) +
+      my_theme(),
+  d_raw %>%
+    filter(year > 1950) %>%
+    group_by(year) %>% summarize(n_citation=mean(n_citation, na.rm=T)) %>%
+    ggplot(aes(year, n_citation)) + geom_point() + #geom_line() +
+      scale_y_continuous("Avg # citations") +
+      scale_x_continuous("Year published") +
+      ggtitle("Citations by Age (stated)") +
+      coord_cartesian(ylim=c(45, 95)) +
+      my_theme() + theme(axis.title.y=element_blank()),
+  cols=2)
+```
+
+* Left: average number of citations by year of publishing (as observed). linear increase until 2000 (newer papers more cited), but then drops off
+* Right: same, but as stated. The trend is the same, but the numbers are inflated by about 50.
+
+Here is the distribution of papers/author:
+
+```{r plot_authdist, fig.width=3, fig.height=2.5}
 d_raw %>% select(authors) %>%
   separate_rows(authors, sep=',') %>%
   group_by(authors) %>% summarize(n_papers=n()) %>%
   group_by(n_papers) %>% summarize(n=n()) %>%
   ggplot(aes(n_papers, n)) + geom_point() +
-    ggtitle("Distribution of number of papers/author") +
+    ggtitle("Distribution of papers/author") +
     scale_x_log10("(log) Number of papers") +
     scale_y_log10("(log) Number of Authors") +
     my_theme()
 ```
 
-## Keyword distribution
+Very heavy-tailed as well.
+
+What are the top keywords?
 
 ```{r plot_keydist}
 d_raw %>% select(keywords) %>%
@@ -178,42 +198,24 @@ d_raw %>% select(keywords) %>%
   kable(format='markdown')
 ```
 
-
-## Individual paper's timeline
-
-```{r plot_timeline}
-# timeline of citations
-edges %>% 
-  filter(cites=='9c024621-3fbb-411d-ae8c-984585f98221') %>%
-  group_by(year_cited) %>% summarize(n=n()) %>%
-  arrange(year_cited) %>%
-  ggplot(aes(year_cited, n)) + geom_point() + geom_line() +
-    ggtitle("Citations for 9c024621-3fbb-411d-ae8c-984585f98221") +
-    xlab("Year") + ylab("Number of citations") +
-    my_theme()
-```
-
-
-# Model
-
+\newpage
+## Model
 Data construction process:
 
-* sample 1000 citations
+* sample 5000 citations from after 2011
 * for each actual citation, sample 24 non-cited papers (from before publication date)
 * for each of the (paper,option) pairs, compute features (n citations, years since, has same author)
-
 
 ```{r model_data_1}
 set.seed(100)
 ## sample actual choices
 dm1 <- edges %>%
   # only look at citations within dataset
-  filter(!is.na(year_published), year_published < year_cited, year_cited==2014) %>%
-  sample_n(1000) %>%
+  filter(!is.na(year_published), year_published < year_cited, year_cited > 2011) %>%
+  sample_n(2500) %>%
   mutate(y=1) %>%
   select(paper_id=id, paper_year=year_cited, option_id=cites, option_year=year_published, y)
 ```
-
 
 ```{r model_data_2}
 ## sample reduced choice sets
@@ -222,9 +224,8 @@ dm2 <- dm1 %>%
   select(paper_id, paper_year, t) %>%
   # cross join with all possible choices to create full choice set
   full_join(d_raw %>%
-              filter(year > 1930) %>%
+              filter(year > 1950) %>%
               select(option_id=id, option_year=year) %>%
-              #sample_n(1000) %>%
               mutate(t='x'), by='t') %>%
   filter(option_year < paper_year) %>%
   # sample only 20 choices for reduced choice set
@@ -235,13 +236,9 @@ dm2 <- dm1 %>%
   filter(is.na(year_cited)) %>% select(-year_cited, -year_published)
 ```
 
-
 ```{r model_data_3}
 # helper function to count number of overlapping items in comma-separated list string
 str_overlap <- Vectorize(function(s1, s2) {
-  #l1 = lapply(str_split(s1, ',')[[1]], function(x) { y = str_split(tolower(x), ' ')[[1]]; sprintf('%s_%s', str_sub(y[1], 1, 1), y[length(y)]) })
-  #l2 = lapply(str_split(s2, ',')[[1]], function(x) { y = str_split(tolower(x), ' ')[[1]]; sprintf('%s_%s', str_sub(y[1], 1, 1), y[length(y)]) })
-  #intersect(l1, l2) %>% length() > 0
   intersect(str_split(s1, ',')[[1]], str_split(s2, ',')[[1]]) %>% length()
 })
 
@@ -283,14 +280,13 @@ H <- DM %>%
   mlogit.data(shape="long", chid.var='paper_id', choice="y", alt.var='alt_id', varying=c(4:7))
 ```
 
-
 ```{r model_model}
 stargazer::stargazer(
-  #mlogit(y ~ n_citations | 0, H),
   mlogit(y ~ log(n_citations+1) | 0, H),
-  #mlogit(y ~ log(n_citations+1) + delta_years | 0, H),
   mlogit(y ~ log(n_citations+1) + log(delta_years) | 0, H),
-  mlogit(y ~ log(n_citations+1) + log(delta_years) + has_same_author | 0, H),
+  mlogit(y ~ log(n_citations+1) + has_same_author | 0, H),
   mlogit(y ~ log(n_citations+1) + log(delta_years) + has_same_author + n_same_keywords| 0, H),  
+  dep.var.caption = "",
+  covariate.labels = c("log Citations", "log Age", "Has same author", "# same keywords"),
   type='text')
 ```
