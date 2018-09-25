@@ -1,5 +1,5 @@
 ---
-title: "MAG - 'Psychiatry'"
+title: "MAG - 'Computer network'"
 author: "Jan Overgoor"
 params:
   date: "Sys.Date()"
@@ -51,8 +51,8 @@ my_theme <- function(base_size=10) {
 }
 ```
 
-```{r data, cache.lazy=F}
-d_raw = read_csv("~/choosing_to_grow/data_academic/processed/mag_psy.txt", col_types='cccddccc')
+```{r data}
+d_raw = read_csv("~/choosing_to_grow/data_academic/processed/mag_net.txt", col_types='cccddccc')
 # explode citations into edges
 edges = d_raw %>%
   separate_rows(references, sep=',') %>%
@@ -147,7 +147,7 @@ Yes, and this shows the censoring at 50 very clearly.
 ```{r plot citations_time}
 Rmisc::multiplot(
   edges %>%
-    filter(year_published > 1930) %>%
+    filter(year_published > 1950) %>%
     group_by(cites, year_published) %>% summarize(n=n()) %>%
     group_by(year_published) %>% summarize(n_citation=mean(n, na.rm=T)) %>%
     ggplot(aes(year_published, n_citation)) + geom_point() + #geom_line() +
@@ -157,13 +157,13 @@ Rmisc::multiplot(
       coord_cartesian(ylim=c(0, 30)) +
       my_theme(),
   d_raw %>%
-    filter(year > 1930) %>%
+    filter(year > 1950) %>%
     group_by(year) %>% summarize(n_citation=mean(n_citation, na.rm=T)) %>%
     ggplot(aes(year, n_citation)) + geom_point() + #geom_line() +
       scale_y_continuous("Avg # citations") +
       scale_x_continuous("Year published") +
       ggtitle("Citations by Age (stated)") +
-      coord_cartesian(ylim=c(45, 100)) +
+      coord_cartesian(ylim=c(45, 95)) +
       my_theme() + theme(axis.title.y=element_blank()),
   cols=2)
 ```
@@ -198,14 +198,11 @@ d_raw %>% select(keywords) %>%
   kable(format='markdown')
 ```
 
-**TODO**: here, language might play a role..
-
-
 \newpage
 ## Model
 Data construction process:
 
-* sample 1000 citations from after 2011
+* sample 5000 citations from after 2011
 * for each actual citation, sample 24 non-cited papers (from before publication date)
 * for each of the (paper,option) pairs, compute features (n citations, years since, has same author)
 
@@ -215,7 +212,7 @@ set.seed(100)
 dm1 <- edges %>%
   # only look at citations within dataset
   filter(!is.na(year_published), year_published < year_cited, year_cited > 2011) %>%
-  sample_n(1000) %>%
+  sample_n(2500) %>%
   mutate(y=1) %>%
   select(paper_id=id, paper_year=year_cited, option_id=cites, option_year=year_published, y)
 ```
@@ -237,7 +234,6 @@ dm2 <- dm1 %>%
   # make sure they weren't actually cited..
   left_join(edges, by=c("paper_id"="id","option_id"="cites")) %>%
   filter(is.na(year_cited)) %>% select(-year_cited, -year_published)
-
 ```
 
 ```{r model_data_3}

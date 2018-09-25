@@ -2,5 +2,7 @@
 *.csv*
 *.html
 *.pyc
+*_files*
+*_cache*
 env*
 .ipynb_checkpoints
