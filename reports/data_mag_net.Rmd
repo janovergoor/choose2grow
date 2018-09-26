@@ -13,6 +13,11 @@ output:
     toc_depth: 2
 ---
 
+```
+to build from command-line, run with:
+R -e "rmarkdown::render('data_mag_net.Rmd', output_file='data_mag_net.pdf')"
+```
+
 ```{r setup, include=FALSE}
 library(knitr)
 knitr::opts_chunk$set(echo=F, warning=F, cache=T, message=F, fig.width=6, fig.height=2.5)
@@ -60,7 +65,10 @@ edges = d_raw %>%
   left_join(d_raw %>% select(cites=id, year_published=year), by='cites')
 ```
 
-We start with some exploratory plots.
+* total number of papers (=nodes): `r nrow(d_raw)`
+* total number of references: `r nrow(edges %>% filter(!is.na(cites)))`
+* total number of references to known nodes (=edges): `r nrow(edges %>% filter(!is.na(year_published)))`
+* share of references to known nodes: `r edges %>% filter(!is.na(cites)) %>% summarize(mean(!is.na(year_published))) %>% as.numeric()`
 
 ```{r plot_dist_time}
 Rmisc::multiplot(
@@ -202,7 +210,7 @@ d_raw %>% select(keywords) %>%
 ## Model
 Data construction process:
 
-* sample 5000 citations from after 2011
+* sample 2500 citations from after 2011
 * for each actual citation, sample 24 non-cited papers (from before publication date)
 * for each of the (paper,option) pairs, compute features (n citations, years since, has same author)
 
@@ -285,8 +293,22 @@ stargazer::stargazer(
   mlogit(y ~ log(n_citations+1) | 0, H),
   mlogit(y ~ log(n_citations+1) + log(delta_years) | 0, H),
   mlogit(y ~ log(n_citations+1) + has_same_author | 0, H),
+  mlogit(y ~ log(n_citations+1) + log(delta_years) + has_same_author| 0, H),  
   mlogit(y ~ log(n_citations+1) + log(delta_years) + has_same_author + n_same_keywords| 0, H),  
   dep.var.caption = "",
   covariate.labels = c("log Citations", "log Age", "Has same author", "# same keywords"),
   type='text')
+```
+
+```{r model_model_tex, results='asis', eval=F}
+stargazer::stargazer(
+  mlogit(y ~ log(n_citations+1) | 0, H),
+  mlogit(y ~ log(n_citations+1) + log(delta_years) | 0, H),
+  mlogit(y ~ log(n_citations+1) + has_same_author | 0, H),
+  mlogit(y ~ log(n_citations+1) + log(delta_years) + has_same_author| 0, H),  
+  mlogit(y ~ log(n_citations+1) + log(delta_years) + has_same_author + n_same_keywords| 0, H),  
+  dep.var.caption = "",
+  covariate.labels = c("log Citations", "log Age", "Has same author", "n same keywords"),
+  header=FALSE, 
+  type='latex')
 ```
