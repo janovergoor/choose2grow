@@ -1,7 +1,6 @@
 import networkx as nx
 from collections import Counter
 from multiprocessing import Pool
-from network_stats import *
 from util import *
 
 """
