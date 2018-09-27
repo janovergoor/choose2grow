@@ -28,6 +28,7 @@ library(dplyr)
 library(readr)
 library(mlogit)
 library(stringr)
+library(scales)
 ```
 
 ```{r}
@@ -54,6 +55,35 @@ my_theme <- function(base_size=10) {
       legend.background=element_rect(fill='transparent')
     )
 }
+
+cdf <- Vectorize(function(x, a, xmin){
+  # (a-1)/xmin * (x/xmin)^(-a)
+  (x/xmin)^(-a+1)
+  #my_zeta(a, x) / my_zeta(a, xmin)
+})
+
+my_zeta <- Vectorize(function(a, xmin) {
+  sum((0:100000 + xmin)^(-a))
+})
+
+plot_powerlaw_cdf <- function(X, title, xlab, ylab) {
+  fit = plfit(X, "range", seq(1.001,4,0.01))
+  print(sprintf("plfit:  alpha=%.3f  xmin=%d", fit$alpha, fit$xmin))
+  DF = data.frame(x=1:max(X)) %>%
+    left_join(data.frame(x=X) %>% group_by(x) %>% summarize(n=n()), by='x') %>%
+    mutate(n=ifelse(is.na(n), 0, n)) %>%
+    mutate(p=(sum(n)-cumsum(n))/sum(n))
+  ggplot(DF, aes(x, p)) + geom_point() +
+    ggtitle(title) +
+    scale_x_log10(xlab, breaks=c(1,10,100,1000), labels=trans_format('log10', math_format(10^.x))) +
+    scale_y_log10(ylab, breaks=c(10e-1, 10e-2, 10e-3, 10e-4, 10e-5, 10e-6), labels=trans_format('log10', math_format(10^.x))) +
+    geom_line(data=data.frame(x=fit$xmin:max(X)) %>% mutate(p=cdf(x, fit$alpha, fit$xmin)*DF$p[fit$xmin]), color='red') +
+    my_theme()
+}
+```
+
+```{r}
+source("http://tuvalu.santafe.edu/~aaronc/powerlaws/plfit.r")
 ```
 
 ```{r data}
@@ -63,6 +93,11 @@ edges = d_raw %>%
   separate_rows(references, sep=',') %>%
   select(id, cites=references, year_cited=year) %>%
   left_join(d_raw %>% select(cites=id, year_published=year), by='cites')
+# compute for every (author,year) , how many papers that author published in that year
+author_published <- d_raw %>%
+  separate_rows(authors, sep=',') %>%
+  group_by(authors, year) %>% summarize(n_papers=n()) %>% ungroup() %>%
+  filter(year > 1950)
 ```
 
 * total number of papers (=nodes): `r nrow(d_raw)`
@@ -135,23 +170,28 @@ Rmisc::multiplot(
 Are the degree distributions similar for the stated and observed citation counts?
 
 ```{r plot_degdist, fig.height=3}
-# degree distribution
 rbind(
-    DF %>% mutate(stat=n_citation) %>% filter(stat > 50) %>% group_by(stat) %>% summarize(n=n()) %>% mutate(g='Stated'),
-    DF %>% mutate(stat=n_citation_data) %>% group_by(stat) %>% summarize(n=n()) %>% mutate(g='Observed')
-  ) %>%
-  ggplot(aes(stat, n)) + geom_point() + 
+  DF %>% mutate(x=n_citation) %>% filter(x > 50) %>% group_by(x) %>% summarize(n=n()) %>% mutate(g='Stated'),
+  DF %>% mutate(x=n_citation_data) %>% group_by(x) %>% summarize(n=n()) %>% mutate(g='Observed')
+) %>%
+  mutate(p=n/sum(n)) %>%
+  ggplot(aes(x, p)) + geom_point() + 
     scale_x_log10("(log) # citations") +
     scale_y_log10("(log) # papers") +
     ggtitle("Degree Distribution") +
     facet_wrap(~g) +
     my_theme()
 ```
-
 Yes, and this shows the censoring at 50 very clearly.
 
-**TODO**: fit $\alpha$?
-
+Here is the cdf and Clauset-Shalizi-Newman powerlaw fit:
+```{r, fig.width=3, fig.height=2.5}
+d_in = DF %>% mutate(x=n_citation_data) %>% group_by(x) %>% summarize(n=n())
+plot_powerlaw_cdf(d_in$x, title="cdf of Citations",
+                  xlab="(log) Number of Citations",
+                  ylab="(log) Number of Papers")
+```
+\newpage
 ```{r plot citations_time}
 Rmisc::multiplot(
   edges %>%
@@ -181,16 +221,23 @@ Rmisc::multiplot(
 
 Here is the distribution of papers/author:
 
-```{r plot_authdist, fig.width=3, fig.height=2.5}
-d_raw %>% select(authors) %>%
+```{r plot_authdist}
+dA = d_raw %>% select(authors) %>%
   separate_rows(authors, sep=',') %>%
-  group_by(authors) %>% summarize(n_papers=n()) %>%
-  group_by(n_papers) %>% summarize(n=n()) %>%
+  group_by(authors) %>% summarize(n_papers=n())
+
+Rmisc::multiplot(
+  dA %>% group_by(n_papers) %>% summarize(n=n()) %>%
   ggplot(aes(n_papers, n)) + geom_point() +
-    ggtitle("Distribution of papers/author") +
-    scale_x_log10("(log) Number of papers") +
-    scale_y_log10("(log) Number of Authors") +
-    my_theme()
+     ggtitle("pdf of papers/author") +
+     scale_x_log10("(log) Number of papers") +
+     scale_y_log10("(log) Number of Authors") +
+     my_theme(),
+  plot_powerlaw_cdf(dA$n_papers, title="cdf of papers/author",
+    xlab="(log) Number of Papers", ylab="(log) Number of Authors"),
+  cols=2
+)
+
 ```
 
 Very heavy-tailed as well.
@@ -206,107 +253,151 @@ d_raw %>% select(keywords) %>%
   kable(format='markdown')
 ```
 
-\newpage
 ## Model
 Data construction process:
 
-* sample 2500 citations from after 2011
+* sample 5000 citations from after 2011
 * for each actual citation, sample 24 non-cited papers (from before publication date)
 * for each of the (paper,option) pairs, compute features (n citations, years since, has same author)
 
-```{r model_data_1}
-set.seed(100)
-## sample actual choices
-dm1 <- edges %>%
-  # only look at citations within dataset
-  filter(!is.na(year_published), year_published < year_cited, year_cited > 2011) %>%
-  sample_n(2500) %>%
-  mutate(y=1) %>%
-  select(paper_id=id, paper_year=year_cited, option_id=cites, option_year=year_published, y)
-```
-
-```{r model_data_2}
-## sample reduced choice sets
-dm2 <- dm1 %>%
-  mutate(t='x') %>%
-  select(paper_id, paper_year, t) %>%
-  # cross join with all possible choices to create full choice set
-  full_join(d_raw %>%
-              filter(year > 1950) %>%
-              select(option_id=id, option_year=year) %>%
-              mutate(t='x'), by='t') %>%
-  filter(option_year < paper_year) %>%
-  # sample only 20 choices for reduced choice set
-  group_by(paper_id) %>% sample_n(24) %>% ungroup() %>%
-  mutate(y=0) %>% select(paper_id, paper_year, option_id, option_year, y) %>%
-  # make sure they weren't actually cited..
-  left_join(edges, by=c("paper_id"="id","option_id"="cites")) %>%
-  filter(is.na(year_cited)) %>% select(-year_cited, -year_published)
-```
-
-```{r model_data_3}
+```{r functions}
 # helper function to count number of overlapping items in comma-separated list string
 str_overlap <- Vectorize(function(s1, s2) {
   intersect(str_split(s1, ',')[[1]], str_split(s2, ',')[[1]]) %>% length()
 })
 
-dm3 <- rbind(dm1, dm2)
-
-## Compute features
-DM <- dm3 %>%
-  # n_citations
-  left_join(
-    # compute number of citations **at time of choosing papers' publishing**
-    inner_join(dm3, edges %>% select(cites, year_cited), by=c('option_id'='cites')) %>%
-      filter(paper_year > year_cited) %>%
-      group_by(paper_id, option_id) %>% summarize(n_citations=n()),
-    by=c('paper_id','option_id')
-  ) %>%
-  mutate(n_citations=ifelse(is.na(n_citations), 0, n_citations)) %>%
-  # years between
-  mutate(delta_years = paper_year - option_year) %>%
-  # overlapping authors
-  left_join(
-    dm3 %>% select(paper_id, option_id) %>%
-      left_join(d_raw %>% select(id, a=authors), by=c('paper_id' ='id')) %>%
-      left_join(d_raw %>% select(id, b=authors), by=c('option_id'='id')) %>%
-      mutate(has_same_author=ifelse(str_overlap(a, b) > 0, 1, 0)) %>% select(-a, -b),
-    by=c('paper_id','option_id')
-  ) %>%
-  # overlapping keywords
-  left_join(
-    dm3 %>% select(paper_id, option_id) %>%
-      left_join(d_raw %>% select(id, a=keywords), by=c('paper_id' ='id')) %>%
-      left_join(d_raw %>% select(id, b=keywords), by=c('option_id'='id')) %>%
-      mutate(n_same_keywords=str_overlap(a, b)) %>% select(-a, -b),
-    by=c('paper_id','option_id')
-  )
-
-H <- DM %>% 
-  group_by(paper_id) %>% mutate(alt_id=row_number()) %>% ungroup() %>%
-  select(paper_id, alt_id, y, n_citations, delta_years, has_same_author, n_same_keywords) %>% as.data.frame() %>%
-  mlogit.data(shape="long", chid.var='paper_id', choice="y", alt.var='alt_id', varying=c(4:7))
+acc <- function(f, data) {
+  # compute predictions
+  P = predict(f, newdata=data) %>% as.data.frame()
+  inner_join(
+    # actuals
+    data %>% filter(y) %>% select(paper_id, correct=alt_id),
+    # predicted
+    P %>% mutate(paper_id=rownames(P)) %>% gather(choice, score, -paper_id) %>% group_by(paper_id) %>% filter(score==max(score)),
+    by='paper_id'
+  ) %>% ungroup() %>%
+    summarize(acc=mean(choice==correct)) %>% .$acc %>% as.numeric()
+}
 ```
 
-```{r model_model}
+```{r make_data_function}
+make_data <- function(n, seed=100){
+    set.seed(seed)
+    ## sample actual choices
+    dm1 <- edges %>%
+      # only look at citations within dataset
+      filter(!is.na(year_published), year_published < year_cited, year_cited > 2011) %>%
+      sample_n(n) %>%
+      mutate(y=1) %>%
+      select(paper_id=id, paper_year=year_cited, option_id=cites, option_year=year_published, y)
+    
+    ## sample reduced choice sets
+    dm2 <- dm1 %>%
+     mutate(t='x') %>%
+     select(paper_id, paper_year, t) %>%
+     # cross join with all possible choices to create full choice set
+     full_join(d_raw %>%
+                 filter(year > 1950) %>%
+                 select(option_id=id, option_year=year) %>%
+                 mutate(t='x'), by='t') %>%
+     filter(option_year < paper_year) %>%
+     # sample only 20 choices for reduced choice set
+     group_by(paper_id) %>% sample_n(24) %>% ungroup() %>%
+     mutate(y=0) %>% select(paper_id, paper_year, option_id, option_year, y) %>%
+     # make sure they weren't actually cited..
+     left_join(edges, by=c("paper_id"="id","option_id"="cites")) %>%
+     filter(is.na(year_cited)) %>% select(-year_cited, -year_published)
+
+    dm3 <- rbind(dm1, dm2)
+    
+    ## Compute features
+    DM <- dm3 %>%
+      # n_citations
+      left_join(
+        # compute number of citations **at time of choosing papers' publishing**
+        inner_join(dm3, edges %>% select(cites, year_cited), by=c('option_id'='cites')) %>%
+          filter(paper_year > year_cited) %>%
+          group_by(paper_id, option_id) %>% summarize(n_citations=n()),
+        by=c('paper_id','option_id')
+      ) %>%
+      mutate(n_citations=ifelse(is.na(n_citations), 0, n_citations)) %>%
+      # years between
+      mutate(delta_years = paper_year - option_year) %>%
+      # overlapping authors
+      left_join(
+        dm3 %>% select(paper_id, option_id) %>%
+          left_join(d_raw %>% select(id, a=authors), by=c('paper_id' ='id')) %>%
+          left_join(d_raw %>% select(id, b=authors), by=c('option_id'='id')) %>%
+          mutate(has_same_author=ifelse(str_overlap(a, b) > 0, 1, 0)) %>% select(-a, -b),
+        by=c('paper_id','option_id')
+      ) %>%
+      # overlapping keywords
+      left_join(
+        dm3 %>% select(paper_id, option_id) %>%
+          left_join(d_raw %>% select(id, a=keywords), by=c('paper_id' ='id')) %>%
+          left_join(d_raw %>% select(id, b=keywords), by=c('option_id'='id')) %>%
+          mutate(n_same_keywords=str_overlap(a, b)) %>% select(-a, -b),
+        by=c('paper_id','option_id')
+      ) %>%
+      # max number of prior paper of author set **at time of option's publishing year** (not at choice year)
+      left_join(
+        dm3 %>% select(paper_id, option_id) %>%
+          left_join(d_raw %>% select(option_id=id, authors, year), by='option_id') %>%
+          separate_rows(authors, sep=',') %>%
+          left_join(author_published, by='authors') %>%
+          group_by(paper_id, option_id, authors) %>%
+          summarize(n_papers=sum(ifelse(year.y < year.x & year.y > 1950, n_papers, 0))) %>%
+          group_by(paper_id, option_id) %>% summarize(max_n_papers=max(n_papers)),
+        by=c('paper_id','option_id')
+      )
+    
+    H <- DM %>% 
+      group_by(paper_id) %>% mutate(alt_id=row_number()) %>% ungroup() %>%
+      select(paper_id, alt_id, y, n_citations, delta_years, has_same_author, n_same_keywords, max_n_papers) %>% as.data.frame()
+
+  return(H)
+}
+```
+
+```{r actually_make_data}
+# split generation up in parts to not use too much memory at once
+a = make_data(n=2500, seed=133)
+b = make_data(n=2500, seed=549)
+H_train <- rbind(a, b[!(b$paper_id %in% a$paper_id), ]) %>%
+  mlogit.data(shape="long", chid.var='paper_id', choice="y", alt.var='alt_id', varying=c(4:8))
+H_test  <- make_data(n=1000, seed=953) %>%
+  mlogit.data(shape="long", chid.var='paper_id', choice="y", alt.var='alt_id', varying=c(4:8))
+```
+
+```{r model_models}
+f1 <- mlogit(y ~ log(n_citations+1) | 0, H_train)
+f2 <- mlogit(y ~ log(n_citations+1) + log(delta_years) | 0, H_train)
+f3 <- mlogit(y ~ log(n_citations+1) + has_same_author | 0, H_train)
+f4 <- mlogit(y ~ log(n_citations+1) + log(delta_years) + has_same_author| 0, H_train)
+f5 <- mlogit(y ~ log(n_citations+1) + log(delta_years) + has_same_author + n_same_keywords| 0, H_train)
+f6 <- mlogit(y ~ log(n_citations+1) + log(delta_years) + has_same_author + n_same_keywords + log(max_n_papers+1) | 0, H_train)
+
+```
+```{r sg_text}
 stargazer::stargazer(
-  mlogit(y ~ log(n_citations+1) | 0, H),
-  mlogit(y ~ log(n_citations+1) + log(delta_years) | 0, H),
-  mlogit(y ~ log(n_citations+1) + has_same_author | 0, H),
-  mlogit(y ~ log(n_citations+1) + log(delta_years) + has_same_author| 0, H),  
-  mlogit(y ~ log(n_citations+1) + log(delta_years) + has_same_author + n_same_keywords| 0, H),  
+  f1, f2, f3, f4, f6,
   dep.var.caption = "",
   covariate.labels = c("log Citations", "log Age", "Has same author", "# same keywords"),
+  header=FALSE, 
   type='text')
 ```
 
-```{r model_model_tex, results='asis', eval=F}
+```{r}
+print("Train accuracy:")
+print(c(acc(f1, H_train), acc(f2, H_train), acc(f3, H_train), acc(f4, H_train), acc(f5, H_train), acc(f6, H_train)))
+print("Test accuracy:")
+print(c(acc(f1, H_test), acc(f2, H_test), acc(f3, H_test), acc(f4, H_test), acc(f5, H_test), acc(f6, H_test)))
+
+```
+
+```{r sg_latex, results='asis', eval=F}
 stargazer::stargazer(
-  mlogit(y ~ log(n_citations+1) | 0, H),
-  mlogit(y ~ log(n_citations+1) + log(delta_years) | 0, H),
-  mlogit(y ~ log(n_citations+1) + has_same_author | 0, H),
-  mlogit(y ~ log(n_citations+1) + log(delta_years) + has_same_author| 0, H),  
-  mlogit(y ~ log(n_citations+1) + log(delta_years) + has_same_author + n_same_keywords| 0, H),  
+  f1, f2, f3, f4, #f5,
   dep.var.caption = "",
   covariate.labels = c("log Citations", "log Age", "Has same author", "n same keywords"),
   header=FALSE, 
