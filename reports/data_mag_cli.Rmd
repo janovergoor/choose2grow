@@ -100,18 +100,19 @@ author_published <- d_raw %>%
   filter(year > 1950)
 ```
 
-* total number of papers (=nodes): `r nrow(d_raw)`
-* total number of references: `r nrow(edges %>% filter(!is.na(cites)))`
-* total number of references to known nodes (=edges): `r nrow(edges %>% filter(!is.na(year_published)))`
-* share of references to known nodes: `r edges %>% filter(!is.na(cites)) %>% summarize(mean(!is.na(year_published))) %>% as.numeric()`
+* total number of papers after 1950 (=nodes): `r nrow(d_raw %>% filter(year>150))`
+* total number of references: `r nrow(edges %>% filter(!is.na(cites), year_cited > 150))`
+* total number of references to known nodes (=edges): `r nrow(edges %>% filter(!is.na(year_published), year_cited > 150))`
+* share of references to known nodes: `r edges %>% filter(!is.na(cites), year_cited > 150) %>% summarize(mean(!is.na(year_published))) %>% as.numeric()`
+* total number of papers with at least one out-link: `r nrow(edges %>% filter(!is.na(cites), year_cited > 150) %>% distinct(id))`
 
 ```{r plot_dist_time}
 Rmisc::multiplot(
   # distribution of when papers are published
-  d_raw %>%
+  d_raw %>% filter(year > 150) %>%
     group_by(year) %>% summarize(n=n()) %>%
     ggplot(aes(year, n)) + geom_line() +
-      scale_x_continuous("Year", limits=c(1980,2020)) +
+      scale_x_continuous("Year", limits=c(1950,2020)) +
       scale_y_continuous("# papers") +
       ggtitle("Number of papers per year") +
       my_theme(),
@@ -169,7 +170,7 @@ Rmisc::multiplot(
 \newpage
 Are the degree distributions similar for the stated and observed citation counts?
 
-```{r plot_degdist, fig.height=3}
+```{r plot_degdist, fig.width=5, fig.height=2.5}
 rbind(
   DF %>% mutate(x=n_citation) %>% filter(x > 50) %>% group_by(x) %>% summarize(n=n()) %>% mutate(g='Stated'),
   DF %>% mutate(x=n_citation_data) %>% group_by(x) %>% summarize(n=n()) %>% mutate(g='Observed')
@@ -182,15 +183,44 @@ rbind(
     facet_wrap(~g) +
     my_theme()
 ```
+
 Yes, and this shows the censoring at 50 very clearly.
 
 Here is the cdf and Clauset-Shalizi-Newman powerlaw fit:
-```{r, fig.width=3, fig.height=2.5}
+```{r plot_powerlaw, fig.width=3, fig.height=2.5}
 d_in = DF %>% mutate(x=n_citation_data) %>% group_by(x) %>% summarize(n=n())
 plot_powerlaw_cdf(d_in$x, title="cdf of Citations",
                   xlab="(log) Number of Citations",
                   ylab="(log) Number of Papers")
 ```
+
+```{r deg_out}
+deg_out = edges %>%
+  filter(!is.na(cites), year_cited > 1950, year_cited < 2017) %>%
+  group_by(id, year_cited) %>%
+  summarize(n_out=sum(ifelse(!is.na(year_published), 1, 0)), n=n()) %>%
+  ungroup()
+```
+
+Out-degree over time (global average is `r deg_out %>% filter(year_cited > 150) %>% ungroup() %>% summarize(mean(n_out)) %>% as.numeric() %>% round(2)`):
+
+```{r plot_out_degree, fig.width=4.8, fig.height=2}
+degs = deg_out %>% group_by(year_cited) %>% summarize(n_out=mean(n_out))
+
+Rmisc::multiplot(
+    ggplot(degs, aes(year_cited, n_out)) + geom_point() +
+      xlab("Year") + ylab("Mean Out-degree") +
+      my_theme(),
+    ggplot(degs, aes(year_cited, n_out)) + geom_point(aes(color='Avg out-degree')) +
+      geom_point(data=degs %>%
+                   inner_join(d_raw %>% group_by(year) %>% summarize(n=n()), by=c("year_cited"="year")) %>%
+                   mutate(n_out=n/296), aes(color='New Papers')) +
+      xlab("Year") + ylab("") +
+      my_theme() + theme(axis.title.y=element_blank(), legend.position=c(0.25, 0.85)),
+    cols=2
+)
+```
+
 \newpage
 ```{r plot citations_time}
 Rmisc::multiplot(
