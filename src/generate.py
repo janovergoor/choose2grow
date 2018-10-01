@@ -21,7 +21,7 @@ from util import *
 # make sure the output folder exists
 mkdir(graphs_path)
 
-
+#@profile
 def make_rp_graph(id, G_in=None, n_max=10000, r=0.5, p=0.5, grow=True, m=1):
     """
     Generate a graph with n_max edges according to the r-p model, which
@@ -71,14 +71,27 @@ def make_rp_graph(id, G_in=None, n_max=10000, r=0.5, p=0.5, grow=True, m=1):
             i = random_sample(G.nodes())
         # count how many edges for this node i
         m_node = 0
+        # pre-fill node-sets
+        # gather all distinct friends
+        friends = set(G.neighbors(i))
+        # all nodes except for friends and self are eligible
+        eligible = set(G.nodes()) - friends - set([i])
+        # subtract friends from FoFs to get eligible FoFs
+        ego2 = set(nx.ego_graph(G, i, 2).nodes())
+        eligible_fofs = ego2 - friends
+        # first round, not selected yet
+        j = None
         # create each edge separately
         while m_node < m:
-            # gather all distinct friends
-            friends = set(nx.ego_graph(G, i, 1).nodes())
-            # all nodes except for friends and self are eligible
-            eligible = set(G.nodes()) - friends - set([i])
-            # subtract friends from FoFs to get eligible FoFs
-            eligible_fofs = set(nx.ego_graph(G, i, 2).nodes()) - friends
+            # intermediate print-out
+            if len(G.edges()) % 5000 == 0:
+                print("Done %d" % len(G.edges()))
+            # add j to node sets if it is defined
+            if j is not None:
+                friends = friends.union(set([j]))
+                eligible = eligible - set([j])
+                ego2 = ego2.union(G.neighbors(j))
+                eligible_fofs = ego2 - friends
             # don't do anything if there are no eligible nodes
             if len(eligible) == 0:
                 m_node = m
@@ -95,10 +108,16 @@ def make_rp_graph(id, G_in=None, n_max=10000, r=0.5, p=0.5, grow=True, m=1):
                 # sample uniformly
                 j = random_sample(choice_set)
             else:
-                # sample according to degree
-                ds = dict(G.degree(choice_set))
-                ps = [float(x) / sum(ds.values()) for x in ds.values()]
-                j = np.random.choice(list(ds.keys()), size=1, p=ps)[0]
+                if len(choice_set) == 1:
+                    j = list(choice_set)[0]
+                else:
+                    # sample according to degree
+                    ds = dict(G.degree(choice_set))
+                    vals = ds.values()
+                    sum_vals = sum(vals)*1.0
+                    ps = [x / sum_vals for x in vals]
+                    # could switch to np.random.multinomial
+                    j = np.random.choice(list(ds.keys()), size=1, p=ps)[0]
             # check if edge didn't happen, already exists, or is a self-edge
             if j is None or G.has_edge(i, j) or i == j:
                 if grow:

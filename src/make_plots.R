@@ -97,7 +97,7 @@ ggsave('../results/fig_2.pdf', p2, width=9, height=3.5)
 
 source("http://tuvalu.santafe.edu/~aaronc/powerlaws/plfit.r")
 
-list.files("../data/graphs", pattern='g.*') %>%
+DF <- list.files("../data/graphs", pattern='g.*') %>%
   mclapply(function(fn){
     el <- read_csv(paste0("../data/graphs/", fn), col_types='iii')
     el <- rbind(data.frame(i=el$from, j=el$to),
@@ -110,16 +110,28 @@ list.files("../data/graphs", pattern='g.*') %>%
   bind_rows() %>%
   group_by(type, r, p) %>%
   summarize(mean=mean(alpha), ll=min(alpha), ul=max(alpha)) %>% ungroup() %>%
-  mutate(r=as.numeric(r)) %>%
-  ggplot(aes(x=r, y=mean, color=p)) + geom_line() +
+  mutate(r=as.numeric(r))
+
+ggplot(DF, aes(x=r, y=mean, color=p)) + geom_line() +
     #geom_segment(aes(x=r, xend=r, y=ll, yend=ul)) +  # too wide, could offset x-axis slightly
     scale_color_brewer(palette='Set1') + 
     scale_x_continuous("r", breaks=seq(0, 1, 0.25), labels=c('0','0.25','0.50','0.75','1')) +
-    scale_y_continuous(TeX("Estimate of '$\\alpha$'"), expand=c(0,0), limits=c(2.5, 5.1)) + #, breaks=seq(0, 1, 0.25)) +
+    scale_y_continuous(TeX("Estimate of $\\gamma$"), expand=c(0,0), limits=c(2.5, 5.1)) +
     ggtitle("Power law fits for (r,p) graphs") +
     my_theme(11) -> p3
 
 ggsave('../results/fig_3.pdf', p3, width=4.5, height=2.5)
+
+ggplot(DF, aes(x=r, y=2/(mean-1), color=p)) + geom_line() +
+  #geom_segment(aes(x=r, xend=r, y=2/(ll-1), yend=2/(ul-1))) +  # too wide, could offset x-axis slightly
+  geom_hline(yintercept=1, color='grey', linetype='dashed') + geom_line() +
+  scale_color_brewer(palette='Set1') + 
+  scale_x_continuous("r", breaks=seq(0, 1, 0.25), labels=c('0','0.25','0.50','0.75','1')) +
+  scale_y_continuous(TeX("Estimate of p"), expand=c(0,0), limits=c(0.5, 1.3), breaks=c(0.6, 0.8, 1.0, 1.2)) +
+  ggtitle("Degree distribution fits for (r,p) graphs") +
+  my_theme(11) -> p3b
+
+ggsave('../results/fig_3b.pdf', p3b, width=4.5, height=2.5)
 
 
 
@@ -154,7 +166,7 @@ df %>%
   ggplot(aes(deg, stat, color=type)) + geom_point(shape=20, alpha=0.7) +
   scale_x_log10("log Degree", limits=c(4, 100), labels=trans_format('log10', math_format(10^.x))) +
   scale_y_log10("Relative likelihood", limits=c(1, 110), labels=trans_format('log10', math_format(10^.x))) +
-  ggtitle("Attachment Function") +
+  #ggtitle("Attachment Function") +
   scale_color_brewer(palette='Set1') + 
   my_theme() + theme(legend.title=element_blank()) -> p4
 
