@@ -4,10 +4,6 @@ author: "Jan Overgoor"
 params:
   date: "Sys.Date()"
 output:
-  html_document:
-    code_folding: hide
-    self_contained: yes
-    toc: no
   pdf_document:
     toc: no
 ---
@@ -200,6 +196,13 @@ H_test <- DM %>% inner_join(DM %>% distinct(choice_id) %>% sample_n(1000), by='c
      group_by(choice_id) %>% mutate(alt_id=row_number()) %>% ungroup() %>%
      select(choice_id, alt_id, y, deg:hops_f) %>%
      mlogit.data(shape="long", chid.var='choice_id', choice="y", alt.var='alt_id')
+```
+
+```{r write_data}
+H_train %>%
+  mutate(y=ifelse(y, 1, 0)) %>%
+  select(choice_id,y,deg,fof=is_fof) %>%
+  write_csv("~/projects/choosing_to_grow/choose2grow/data/flickr-growth_choices_py.csv")
 ```
 
 ```{r model_models}
