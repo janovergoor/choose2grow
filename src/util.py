@@ -131,7 +131,8 @@ def read_data(fn, max_deg=50, vvv=0):
         pattern = "%s/choices/%s*.csv" % (data_path, fn_tmp)
         fns = [os.path.basename(x) for x in glob(pattern)]
         for x in fns:
-            D = read_data_single(x, max_deg)
+            path = '%s/%s/%s' % (data_path, 'choices', x)
+            D = read_data_single(path, max_deg)
             # update choice ids so they dont overlap
             fid = x.split('.csv')[0].split('-')[-1]
             ids = [('%09d' + fid) % x for x in D.choice_id]
@@ -141,25 +142,25 @@ def read_data(fn, max_deg=50, vvv=0):
         D = np.hstack(Ds)
     else:
         # read one
-        D = read_data_single(fn, max_deg)
+        path = '%s/%s/%s' % (data_path, 'choices', fn)
+        D = read_data_single(path, max_deg)
     # cut off at max observed degree
     if vvv:
         print("[%s] read (%d x %d)" % (fn, D.shape[0], D.shape[1]))
     return D
 
 
-def read_data_single(fn, max_deg=50):
+def read_data_single(path, max_deg=50):
     """
     Read individual data for a single graph.
     Degrees are cut-off at max_deg.
     """
-    path = '%s/%s/%s' % (data_path, 'choices', fn)
     # read the choices
     D = pd.read_csv(path)
     if max_deg is not None:
         # remove too high degree choices
         D = D[D.deg <= max_deg]
-        # remove cases without any choice (choice was higher than max_deg)
-        D = D[D.groupby('choice_id')['y'].transform(np.sum) == 1]
+    # remove cases without any choice (choice was higher than max_deg)
+    D = D[D.groupby('choice_id')['y'].transform(np.sum) == 1]
     # read the choices
     return D

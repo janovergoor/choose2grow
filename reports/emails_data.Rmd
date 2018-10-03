@@ -1,0 +1,162 @@
+---
+title: "Data - Emails"
+author: "Jan Overgoor"
+params:
+  date: "Sys.Date()"
+output:
+  html_document:
+    code_folding: hide
+    self_contained: yes
+    toc: no
+  pdf_document:
+    toc: no
+---
+
+Source: [http://snap.stanford.edu/data/email-EuAll.html](http://snap.stanford.edu/data/email-EuAll.html)
+
+```{r setup, include=FALSE}
+library(knitr)
+knitr::opts_chunk$set(echo=F, warning=F, cache=T, message=F, fig.width=6, fig.height=2.5)
+suppressPackageStartupMessages(library('ggplot2'))
+ggplot2::theme_set(theme_minimal())
+library(tidyr)
+library(dplyr)
+library(readr)
+library(mlogit)
+library(stringr)
+library(scales)
+```
+
+```{r}
+# cleaner theme
+my_theme <- function(base_size=10) {
+  # Set the base size
+  theme_bw(base_size=base_size) +
+    theme(
+      # Center title
+      plot.title = element_text(hjust = 0.5),
+      # Make the background white
+      panel.background=element_rect(fill='white', colour='white'),
+      panel.grid.major=element_blank(),
+      panel.grid.minor=element_blank(),
+      # Minimize margins
+      plot.margin=unit(c(0.2, 0.2, 0.2, 0.2), "cm"),
+      panel.margin=unit(0.25, "lines"),
+      # Tiny space between axis labels and tick labels
+      axis.title.x=element_text(margin=ggplot2::margin(t=6.0)),
+      axis.title.y=element_text(margin=ggplot2::margin(r=6.0)),
+      # Simplify the legend
+      legend.key=element_blank(),
+      legend.title=element_blank(),
+      legend.background=element_rect(fill='transparent')
+    )
+}
+
+cdf <- Vectorize(function(x, a, xmin){
+  # (a-1)/xmin * (x/xmin)^(-a)
+  (x/xmin)^(-a+1)
+  #my_zeta(a, x) / my_zeta(a, xmin)
+})
+
+my_zeta <- Vectorize(function(a, xmin) {
+  sum((0:100000 + xmin)^(-a))
+})
+
+plot_powerlaw_cdf <- function(X, title, xlab, ylab) {
+  X = X[X>0]
+  fit = plfit(X, "range", seq(1.001,4,0.01))
+  print(sprintf("plfit:  alpha=%.3f  xmin=%d", fit$alpha, fit$xmin))
+  DF = data.frame(x=1:max(X)) %>%
+    left_join(data.frame(x=X) %>% group_by(x) %>% summarize(n=n()), by='x') %>%
+    mutate(n=ifelse(is.na(n), 0, n)) %>%
+    mutate(p=(sum(n)-cumsum(n))/sum(n))
+  ggplot(DF, aes(x, p)) + geom_point() +
+    ggtitle(title) +
+    scale_x_log10(xlab, breaks=c(1,10,100,1000), labels=trans_format('log10', math_format(10^.x))) +
+    scale_y_log10(ylab, breaks=c(10e-1, 10e-2, 10e-3, 10e-4, 10e-5, 10e-6), labels=trans_format('log10', math_format(10^.x))) +
+    geom_line(data=data.frame(x=fit$xmin:max(X)) %>% mutate(p=cdf(x, fit$alpha, fit$xmin)*DF$p[fit$xmin]), color='red') +
+    geom_text(aes(x=5, y=.01, label=sprintf('xmin=%d\nalpha=%.3f', fit$xmin,  fit$alpha))) +
+    my_theme() #+ theme(text=element_text(family="Garamond", size=14))
+}
+```
+
+```{r}
+source("http://tuvalu.santafe.edu/~aaronc/powerlaws/plfit.r")
+```
+
+```{r data}
+edges <- read_delim("~/projects/choosing_to_grow/data_external/eu-core/email-Eu-core-temporal-Dept1.txt",
+                   col_names=c("from","to","t"), col_types='ddd', delim=' ') %>%
+  # guestimate age
+  mutate(d=round(t/(24*60*60)), ds=as.Date('2003-10-01') + lubridate::days(d))
+
+nodes <- full_join(
+  edges %>% mutate(node=from) %>% group_by(node) %>% summarize(n_out=n()),
+  edges %>% mutate(node=to  ) %>% group_by(node) %>% summarize(n_in=n()),
+  by='node'
+) %>%
+  mutate(n_in =ifelse(is.na(n_in ), 0, n_in ),
+         n_out=ifelse(is.na(n_out), 0, n_out))
+```
+
+
+degree distributions of emails (power law?)
+```{r plot_degdist}
+Rmisc::multiplot(
+  plot_powerlaw_cdf(nodes$n_out, title="cdf - Outgoing Emails",
+                    xlab="(log) Number of Emails Sent", ylab="(log) Number of People"),
+  plot_powerlaw_cdf(nodes$n_in, title="cdf - Incoming Emails",
+                    xlab="(log) Number of Emails Received", ylab="(log) Number of People"),
+  cols=2
+)
+```
+
+```{r plot_nodes_day}
+edges %>%
+  filter(ds < as.Date('2005-03-01')) %>% 
+  group_by(ds) %>% summarize(n=n()) %>%
+  ggplot(aes(ds, n)) + geom_line() +
+    xlab("Date") + ylab("# emails") + my_theme()
+```
+
+
+Make the data set:
+
+```{r fn_choice_data}
+make_data <- function(n, seed=100){
+    set.seed(seed)
+    ## sample actual choices
+    dm1 <- edges %>%
+      # need some time to gather data
+      filter(ds > '2004-03-01') %>%
+      sample_n(n) %>%
+      mutate(y=1) %>%
+      select(from, t, to, y)
+    
+    ## sample reduced choice sets
+    dm2 <- dm1 %>%
+     mutate(j='x', id=paste(from, t)) %>%
+     select(from, t, j) %>%
+     # cross join with all possible choices to create full choice set
+     full_join(nodes %>% mutate(j='x') %>% select(node, j), by='j') %>%
+     # sample only 20 choices for reduced choice set
+     group_by(from, t) %>% sample_n(24) %>% ungroup() %>%
+     mutate(y=0) %>% select(from, t, to=node, y)
+
+    dm3 <- rbind(dm1, dm2)
+    
+    ## Compute features
+    DM <- dm3
+    
+    H <- DM %>% 
+      mutate(id=paste(from, t, sep='-')) %>%
+      group_by(id) %>% mutate(alt_id=row_number()) %>% ungroup() %>%
+      select(id, alt_id, y) %>% as.data.frame()
+
+  return(H)
+}
+```
+```{r make_choice_data}
+a <- make_data(n=100, seed=1)
+a %>% group_by(id) %>% summarize(n(), sum(y)) %>% head()
+```
