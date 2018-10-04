@@ -6,7 +6,8 @@ import random
 
 """
 
-  Script to convert raw "flickr growth" edges to choice data.
+  Script to process data for analysis in section 5.2 of the paper.
+  It converts the raw "flickr growth" edges to choice data.
   Data is downloadable at:
 
     http://socialnetworks.mpi-sws.mpg.de/data/flickr-growth.txt.gz
