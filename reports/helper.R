@@ -1,12 +1,11 @@
 suppressPackageStartupMessages(library(ggplot2))
+library(mlogit)
+library(scales)
+library(Rmisc)
+library(stringr)
 library(tidyr)
 library(dplyr)
 library(readr)
-library(mlogit)
-library(stringr)
-library(scales)
-library(Rmisc)
-
 
 # cleaner theme
 my_theme <- function(base_size=10) {
@@ -32,18 +31,20 @@ my_theme <- function(base_size=10) {
     )
 }
 
-ggplot2::theme_set(my_theme)
+# read plfit from external source
+source("http://tuvalu.santafe.edu/~aaronc/powerlaws/plfit.r")
 
+# CDF of power law distribution
 cdf <- Vectorize(function(x, a, xmin){
-  # (a-1)/xmin * (x/xmin)^(-a)
   (x/xmin)^(-a+1)
-  #my_zeta(a, x) / my_zeta(a, xmin)
 })
 
+# approximate Zeta function
 my_zeta <- Vectorize(function(a, xmin) {
   sum((0:100000 + xmin)^(-a))
 })
 
+# plot a inverse CDF of a degree distribution with a power law fit overlaid
 plot_powerlaw_cdf <- function(X, title, xlab, ylab) {
   fit <- plfit(X, "range", seq(1.001,4,0.01))
   print(sprintf("plfit:  alpha=%.3f  xmin=%d", fit$alpha, fit$xmin))
@@ -59,10 +60,7 @@ plot_powerlaw_cdf <- function(X, title, xlab, ylab) {
     my_theme()
 }
 
-
-source("http://tuvalu.santafe.edu/~aaronc/powerlaws/plfit.r")
-
-
+# compute the accuracy of a model on new data
 acc <- function(f, data) {
   # compute predictions
   P = predict(f, newdata=data) %>% as.data.frame()
@@ -75,4 +73,3 @@ acc <- function(f, data) {
   ) %>% ungroup() %>%
     summarize(acc=mean(choice==correct)) %>% .$acc %>% as.numeric()
 }
-

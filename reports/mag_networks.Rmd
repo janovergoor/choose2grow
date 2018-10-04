@@ -1,5 +1,5 @@
 ---
-title: "MAG - 'Climatology'"
+title: "MAG - 'Computer networks'"
 author: "Jan Overgoor"
 params:
   date: "Sys.Date()"
@@ -15,7 +15,7 @@ output:
 
 ```
 to build from command-line, run with:
-R -e "rmarkdown::render('mag_climatology.Rmd', output_file='mag_climatology.pdf')"
+R -e "rmarkdown::render('mag_networks.Rmd', output_file='mag_networks.pdf')"
 ```
 
 ```{r setup, include=F}
@@ -25,7 +25,7 @@ source("helper.R")
 ```
 
 ```{r data}
-d_raw <- read_csv("~/choosing_to_grow/data_academic/processed/mag_cli.txt", col_types='cccddccc')
+d_raw <- read_csv("~/choosing_to_grow/data_academic/processed/mag_net.txt", col_types='cccddccc')
 # explode citations into edges
 edges <- d_raw %>%
   separate_rows(references, sep=',') %>%
