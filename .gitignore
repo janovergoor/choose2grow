@@ -1,10 +1,11 @@
 .DS_Store
 *.csv*
 *.html
+*.pdf
 *.pyc
 *_files*
 *_cache*
-*.tar.gz
+*.gz
 *_old
 env*
 .ipynb_checkpoints

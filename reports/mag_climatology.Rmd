@@ -15,81 +15,19 @@ output:
 
 ```
 to build from command-line, run with:
-R -e "rmarkdown::render('data_mag_cli.Rmd', output_file='data_mag_cli.pdf')"
+R -e "rmarkdown::render('mag_climatology.Rmd', output_file='mag_climatology.pdf')"
 ```
 
-```{r setup, include=FALSE}
+```{r setup, include=F}
 library(knitr)
 knitr::opts_chunk$set(echo=F, warning=F, cache=T, message=F, fig.width=6, fig.height=2.5)
-suppressPackageStartupMessages(library('ggplot2'))
-ggplot2::theme_set(theme_minimal())
-library(tidyr)
-library(dplyr)
-library(readr)
-library(mlogit)
-library(stringr)
-library(scales)
-```
-
-```{r}
-# cleaner theme
-my_theme <- function(base_size=10) {
-  # Set the base size
-  theme_bw(base_size=base_size) +
-    theme(
-      # Center title
-      plot.title = element_text(hjust = 0.5),
-      # Make the background white
-      panel.background=element_rect(fill='white', colour='white'),
-      panel.grid.major=element_blank(),
-      panel.grid.minor=element_blank(),
-      # Minimize margins
-      plot.margin=unit(c(0.2, 0.2, 0.2, 0.2), "cm"),
-      panel.margin=unit(0.25, "lines"),
-      # Tiny space between axis labels and tick labels
-      axis.title.x=element_text(margin=ggplot2::margin(t=6.0)),
-      axis.title.y=element_text(margin=ggplot2::margin(r=6.0)),
-      # Simplify the legend
-      legend.key=element_blank(),
-      legend.title=element_blank(),
-      legend.background=element_rect(fill='transparent')
-    )
-}
-
-cdf <- Vectorize(function(x, a, xmin){
-  # (a-1)/xmin * (x/xmin)^(-a)
-  (x/xmin)^(-a+1)
-  #my_zeta(a, x) / my_zeta(a, xmin)
-})
-
-my_zeta <- Vectorize(function(a, xmin) {
-  sum((0:100000 + xmin)^(-a))
-})
-
-plot_powerlaw_cdf <- function(X, title, xlab, ylab) {
-  fit = plfit(X, "range", seq(1.001,4,0.01))
-  print(sprintf("plfit:  alpha=%.3f  xmin=%d", fit$alpha, fit$xmin))
-  DF = data.frame(x=1:max(X)) %>%
-    left_join(data.frame(x=X) %>% group_by(x) %>% summarize(n=n()), by='x') %>%
-    mutate(n=ifelse(is.na(n), 0, n)) %>%
-    mutate(p=(sum(n)-cumsum(n))/sum(n))
-  ggplot(DF, aes(x, p)) + geom_point() +
-    ggtitle(title) +
-    scale_x_log10(xlab, breaks=c(1,10,100,1000), labels=trans_format('log10', math_format(10^.x))) +
-    scale_y_log10(ylab, breaks=c(10e-1, 10e-2, 10e-3, 10e-4, 10e-5, 10e-6), labels=trans_format('log10', math_format(10^.x))) +
-    geom_line(data=data.frame(x=fit$xmin:max(X)) %>% mutate(p=cdf(x, fit$alpha, fit$xmin)*DF$p[fit$xmin]), color='red') +
-    my_theme()
-}
-```
-
-```{r}
-source("http://tuvalu.santafe.edu/~aaronc/powerlaws/plfit.r")
+source("helper.R")
 ```
 
 ```{r data}
-d_raw = read_csv("~/choosing_to_grow/data_academic/processed/mag_cli.txt", col_types='cccddccc')
+d_raw <- read_csv("~/choosing_to_grow/data_academic/processed/mag_cli.txt", col_types='cccddccc')
 # explode citations into edges
-edges = d_raw %>%
+edges <- d_raw %>%
   separate_rows(references, sep=',') %>%
   select(id, cites=references, year_cited=year) %>%
   left_join(d_raw %>% select(cites=id, year_published=year), by='cites')
@@ -107,7 +45,7 @@ author_published <- d_raw %>%
 * total number of papers with at least one out-link: `r nrow(edges %>% filter(!is.na(cites), year_cited > 150) %>% distinct(id))`
 
 ```{r plot_dist_time}
-Rmisc::multiplot(
+multiplot(
   # distribution of when papers are published
   d_raw %>% filter(year > 150) %>%
     group_by(year) %>% summarize(n=n()) %>%
@@ -137,7 +75,7 @@ Next, we compare the stated number of citations to the amount we can actually fi
 
 ```{r data_coverage}
 # how many of the citations in "n_citation" do we actually observe in the data?
-DF = inner_join(d_raw,
+DF <- inner_join(d_raw,
            edges %>% group_by(cites) %>% summarize(n_citation_data=n()),
            by=c('id'='cites')) %>%
   select(id, n_citation, n_citation_data) %>%
@@ -145,7 +83,7 @@ DF = inner_join(d_raw,
   filter(!is.na(id))
 ```
 ```{r plot_coverage}
-Rmisc::multiplot(
+multiplot(
   # density
   ggplot(DF, aes(p_citation_data)) + geom_density() +
     scale_x_continuous("Share of citations") +
@@ -187,15 +125,16 @@ rbind(
 Yes, and this shows the censoring at 50 very clearly.
 
 Here is the cdf and Clauset-Shalizi-Newman powerlaw fit:
+
 ```{r plot_powerlaw, fig.width=3, fig.height=2.5}
-d_in = DF %>% mutate(x=n_citation_data) %>% group_by(x) %>% summarize(n=n())
+d_in <- DF %>% mutate(x=n_citation_data) %>% group_by(x) %>% summarize(n=n())
 plot_powerlaw_cdf(d_in$x, title="cdf of Citations",
                   xlab="(log) Number of Citations",
                   ylab="(log) Number of Papers")
 ```
 
 ```{r deg_out}
-deg_out = edges %>%
+deg_out <- edges %>%
   filter(!is.na(cites), year_cited > 1950, year_cited < 2017) %>%
   group_by(id, year_cited) %>%
   summarize(n_out=sum(ifelse(!is.na(year_published), 1, 0)), n=n()) %>%
@@ -205,9 +144,9 @@ deg_out = edges %>%
 Out-degree over time (global average is `r deg_out %>% filter(year_cited > 150) %>% ungroup() %>% summarize(mean(n_out)) %>% as.numeric() %>% round(2)`):
 
 ```{r plot_out_degree, fig.width=4.8, fig.height=2}
-degs = deg_out %>% group_by(year_cited) %>% summarize(n_out=mean(n_out))
+degs <- deg_out %>% group_by(year_cited) %>% summarize(n_out=mean(n_out))
 
-Rmisc::multiplot(
+multiplot(
     ggplot(degs, aes(year_cited, n_out)) + geom_point() +
       xlab("Year") + ylab("Mean Out-degree") +
       my_theme(),
@@ -222,8 +161,9 @@ Rmisc::multiplot(
 ```
 
 \newpage
+
 ```{r plot citations_time}
-Rmisc::multiplot(
+multiplot(
   edges %>%
     filter(year_published > 1950) %>%
     group_by(cites, year_published) %>% summarize(n=n()) %>%
@@ -252,11 +192,11 @@ Rmisc::multiplot(
 Here is the distribution of papers/author:
 
 ```{r plot_authdist}
-dA = d_raw %>% select(authors) %>%
+dA <- d_raw %>% select(authors) %>%
   separate_rows(authors, sep=',') %>%
   group_by(authors) %>% summarize(n_papers=n())
 
-Rmisc::multiplot(
+multiplot(
   dA %>% group_by(n_papers) %>% summarize(n=n()) %>%
   ggplot(aes(n_papers, n)) + geom_point() +
      ggtitle("pdf of papers/author") +
@@ -267,7 +207,6 @@ Rmisc::multiplot(
     xlab="(log) Number of Papers", ylab="(log) Number of Authors"),
   cols=2
 )
-
 ```
 
 Very heavy-tailed as well.
@@ -290,27 +229,12 @@ Data construction process:
 * for each actual citation, sample 24 non-cited papers (from before publication date)
 * for each of the (paper,option) pairs, compute features (n citations, years since, has same author)
 
-```{r functions}
+```{r make_data}
 # helper function to count number of overlapping items in comma-separated list string
 str_overlap <- Vectorize(function(s1, s2) {
   intersect(str_split(s1, ',')[[1]], str_split(s2, ',')[[1]]) %>% length()
 })
 
-acc <- function(f, data) {
-  # compute predictions
-  P = predict(f, newdata=data) %>% as.data.frame()
-  inner_join(
-    # actuals
-    data %>% filter(y) %>% select(paper_id, correct=alt_id),
-    # predicted
-    P %>% mutate(paper_id=rownames(P)) %>% gather(choice, score, -paper_id) %>% group_by(paper_id) %>% filter(score==max(score)),
-    by='paper_id'
-  ) %>% ungroup() %>%
-    summarize(acc=mean(choice==correct)) %>% .$acc %>% as.numeric()
-}
-```
-
-```{r make_data_function}
 make_data <- function(n, seed=100){
     set.seed(seed)
     ## sample actual choices
@@ -391,9 +315,11 @@ make_data <- function(n, seed=100){
 
 ```{r actually_make_data}
 # split generation up in parts to not use too much memory at once
-a = make_data(n=2500, seed=133)
-b = make_data(n=2500, seed=549)
-H_train <- rbind(a, b[!(b$paper_id %in% a$paper_id), ]) %>%
+a <- make_data(n=3000, seed=133)
+b <- make_data(n=3000, seed=549)
+c <- rbind(a, b[!(b$paper_id %in% a$paper_id), ])
+H_train <- c %>%
+  filter(paper_id %in% distinct(c, paper_id) %>% sample_n(5000) %>% .$paper_id) %>%
   mlogit.data(shape="long", chid.var='paper_id', choice="y", alt.var='alt_id', varying=c(4:8))
 H_test  <- make_data(n=1000, seed=953) %>%
   mlogit.data(shape="long", chid.var='paper_id', choice="y", alt.var='alt_id', varying=c(4:8))
@@ -401,35 +327,23 @@ H_test  <- make_data(n=1000, seed=953) %>%
 
 ```{r model_models}
 f1 <- mlogit(y ~ log(n_citations+1) | 0, H_train)
-f2 <- mlogit(y ~ log(n_citations+1) + log(delta_years) | 0, H_train)
-f3 <- mlogit(y ~ log(n_citations+1) + has_same_author | 0, H_train)
-f4 <- mlogit(y ~ log(n_citations+1) + log(delta_years) + has_same_author| 0, H_train)
-f5 <- mlogit(y ~ log(n_citations+1) + log(delta_years) + has_same_author + n_same_keywords| 0, H_train)
-f6 <- mlogit(y ~ log(n_citations+1) + log(delta_years) + has_same_author + n_same_keywords + log(max_n_papers+1) | 0, H_train)
-
+f2 <- mlogit(y ~ log(n_citations+1) + has_same_author | 0, H_train)
+f3 <- mlogit(y ~ log(n_citations+1) + has_same_author + log(delta_years) | 0, H_train)
+f4 <- mlogit(y ~ log(n_citations+1) + has_same_author + log(delta_years)  + log(max_n_papers+1) | 0, H_train)
+f5 <- mlogit(y ~ log(n_citations+1) + has_same_author + log(delta_years)  + log(max_n_papers+1) + n_same_keywords| 0, H_train)
 ```
 ```{r sg_text}
 stargazer::stargazer(
-  f1, f2, f3, f4, f6,
+  f1, f2, f3, f4, f5,
   dep.var.caption = "",
-  covariate.labels = c("log Citations", "log Age", "Has same author", "# same keywords"),
+  covariate.labels = c("log Citations", "Has same author", "log Age", "Max papers by author", "# same keywords"),
   header=FALSE, 
   type='text')
 ```
 
 ```{r}
 print("Train accuracy:")
-print(c(acc(f1, H_train), acc(f2, H_train), acc(f3, H_train), acc(f4, H_train), acc(f5, H_train), acc(f6, H_train)))
+print(c(acc(f1, H_train), acc(f2, H_train), acc(f3, H_train), acc(f4, H_train), acc(f5, H_train)))
 print("Test accuracy:")
-print(c(acc(f1, H_test), acc(f2, H_test), acc(f3, H_test), acc(f4, H_test), acc(f5, H_test), acc(f6, H_test)))
-
-```
-
-```{r sg_latex, results='asis', eval=F}
-stargazer::stargazer(
-  f1, f2, f3, f4, #f5,
-  dep.var.caption = "",
-  covariate.labels = c("log Citations", "log Age", "Has same author", "n same keywords"),
-  header=FALSE, 
-  type='latex')
+print(c(acc(f1, H_test), acc(f2, H_test), acc(f3, H_test), acc(f4, H_test), acc(f5, H_test)))
 ```
