@@ -3,6 +3,7 @@ import pandas as pd
 from util import *
 import csv
 import random
+from datetime import datetime
 
 """
 
@@ -17,12 +18,13 @@ import random
 
 """
 
+# date to start sampling from
+start_date = ['2006-11-05', '2007-03-01'][1]
 # file names
 fn_in = data_path + '/flickr-growth.txt.gz'
-fn_out = data_path + '/flickr-growth_choices.csv'
+fn_out = data_path + '/flickr-growth_choices_%s.csv' % \
+    datetime.strptime(start_date, '%Y-%m-%d').strftime('%y%m%d')
 url = 'http://socialnetworks.mpi-sws.mpg.de/data'
-# date to start sampling from
-start_date = ['2006-11-05', '2017-03-01'][0]
 # number of choice we want to create
 n_sample = 20000
 # number of negative samples per choice set
