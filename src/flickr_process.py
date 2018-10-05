@@ -59,7 +59,7 @@ print("Starting graph has %d nodes" % len(G))
 # open the output file
 f_out = open(fn_out, 'wt')
 writer = csv.writer(f_out, delimiter=',')
-tmp = writer.writerow(['choice_id', 'y', 'deg', 'hops', 'reciprocal'])
+tmp = writer.writerow(['choice_id', 'y', 'deg', 'hops', 'recip', 'n_paths'])
 
 
 # @profile
@@ -92,9 +92,16 @@ def do_edge(i, j, n):
             hops = nx.shortest_path_length(G, source=i, target=new_j)
         except Exception:
             hops = 'NA'
-        reciprocal = 1 if G.has_edge(new_j, i) else 0
+        recip = 1 if G.has_edge(new_j, i) else 0
+        if hops == 2:
+            try:
+                n_paths = nx.all_shortest_paths(G, source=1, target=new_j)
+            except Exception:
+                n_paths = 0
+        else:
+            n_paths = 0
         # write out the choice
-        tmp = writer.writerow([n, y, deg, hops, reciprocal])
+        tmp = writer.writerow([n, y, deg, hops, recip, n_paths])
 
 
 # subset rest of the edges

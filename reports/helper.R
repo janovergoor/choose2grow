@@ -60,16 +60,33 @@ plot_powerlaw_cdf <- function(X, title, xlab, ylab) {
     my_theme()
 }
 
+# compute Jackson's r on a degree distribution
+# based on code by Eduardo Muggenburg
+r_jackson <- function(deg_dist, m, tol=0.00000001 , r0=1.3, r1=1.7, max_iter=500){
+  LHS <- 1 - log(1 - deg_dist + 0.0001)
+  delta <- abs(r0 - r1)
+  k <- 1
+  while(delta > tol & k < 50){
+    RHS <- log(seq(1, length(deg_dist), 1) + r0 * m)
+    linearMod <- lm(LHS ~ 0 + RHS)
+    r1 <- summary(linearMod)$coefficients[1,1]
+    delta <- abs(r0 - r1)
+    r0 <- r1
+    k <- k + 1
+  }
+  r1
+}
+
 # compute the accuracy of a model on new data
 acc <- function(f, data) {
   # compute predictions
   P = predict(f, newdata=data) %>% as.data.frame()
   inner_join(
     # actuals
-    data %>% filter(y) %>% select(paper_id, correct=alt_id),
+    data %>% filter(y) %>% select(choice_id, correct=alt_id) %>% mutate(choice_id=as.character(choice_id)),
     # predicted
-    P %>% mutate(paper_id=rownames(P)) %>% gather(choice, score, -paper_id) %>% group_by(paper_id) %>% filter(score==max(score)),
-    by='paper_id'
+    P %>% mutate(choice_id=rownames(P)) %>% gather(choice, score, -choice_id) %>% group_by(choice_id) %>% filter(score==max(score)),
+    by='choice_id'
   ) %>% ungroup() %>%
     summarize(acc=mean(choice==correct)) %>% .$acc %>% as.numeric()
 }

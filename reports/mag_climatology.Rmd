@@ -307,7 +307,7 @@ make_data <- function(n, seed=100){
     
     H <- DM %>% 
       group_by(paper_id) %>% mutate(alt_id=row_number()) %>% ungroup() %>%
-      select(paper_id, alt_id, y, n_citations:max_n_papers) %>% as.data.frame()
+      select(choice_id=paper_id, alt_id, y, n_citations:max_n_papers) %>% as.data.frame()
 
   return(H)
 }
@@ -317,17 +317,17 @@ make_data <- function(n, seed=100){
 # split generation up in parts to not use too much memory at once
 a <- make_data(n=2500, seed=133)
 b <- make_data(n=2500, seed=549)
-a <- rbind(a, b[!(b$paper_id %in% a$paper_id), ])  # join together
+a <- rbind(a, b[!(b$choice_id %in% a$choice_id), ])  # join together
 b <- make_data(n=1000, seed=791)  # get few extra to make sure to hit 5000
-c <- rbind(a, b[!(b$paper_id %in% a$paper_id), ])  # join together
+c <- rbind(a, b[!(b$choice_id %in% a$choice_id), ])  # join together
 ```
 ```{r actually_make_data2}
-samples = distinct(c, paper_id) %>% sample_n(5000) %>% .$paper_id
+samples = distinct(c, choice_id) %>% sample_n(5000) %>% .$choice_id
 H_train <- c %>%
-  filter(paper_id %in% samples) %>%
-  mlogit.data(chid.var='paper_id', choice="y", alt.var='alt_id')
+  filter(choice_id %in% samples) %>%
+  mlogit.data(chid.var='choice_id', choice="y", alt.var='alt_id')
 H_test  <- make_data(n=1000, seed=953) %>%
-  mlogit.data(chid.var='paper_id', choice="y", alt.var='alt_id')
+  mlogit.data(chid.var='choice_id', choice="y", alt.var='alt_id')
 ```
 
 ```{r model_models}
@@ -349,7 +349,9 @@ stargazer::stargazer(
 
 ```{r}
 print("Train accuracy:")
-print(c(acc(f1, H_train), acc(f2, H_train), acc(f3, H_train), acc(f4, H_train), acc(f5, H_train)))
+c(acc(f1, H_train), acc(f2, H_train), acc(f3, H_train), acc(f4, H_train), acc(f5, H_train)) %>%
+  round(4) %>% paste(collapse=' & ') %>% print()
 print("Test accuracy:")
-print(c(acc(f1, H_test), acc(f2, H_test), acc(f3, H_test), acc(f4, H_test), acc(f5, H_test)))
+c(acc(f1, H_test), acc(f2, H_test), acc(f3, H_test), acc(f4, H_test), acc(f5, H_test)) %>%
+  round(4) %>% paste(collapse=' & ') %>% print()
 ```
