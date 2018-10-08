@@ -19,14 +19,14 @@ from datetime import datetime
 """
 
 # date to start sampling from
-start_date = ['2006-11-05', '2007-03-01'][1]
+start_date = ['2006-11-05', '2007-03-01'][0]
 # file names
 fn_in = data_path + '/flickr-growth.txt.gz'
 fn_out = data_path + '/flickr-growth_choices_%s.csv' % \
     datetime.strptime(start_date, '%Y-%m-%d').strftime('%y%m%d')
 url = 'http://socialnetworks.mpi-sws.mpg.de/data'
 # number of choice we want to create
-n_sample = 20000
+n_sample = 22000
 # number of negative samples per choice set
 n_alt = 24
 # probability that an edge will become a choice set
@@ -76,7 +76,8 @@ def do_edge(i, j, n):
     G.add_node(i)
     G.add_node(j)
     # make sure they're not already chosen
-    js = [j] + list(set(js) - set(G.successors(i)))[:n_alt]
+    succs = set(G.successors(i))
+    js = [j] + list(set(js) - succs)[:n_alt]
     # process each option separately
     for new_j in js:
         # compute features
@@ -96,8 +97,9 @@ def do_edge(i, j, n):
             hops = 'NA'
         recip = 1 if G.has_edge(new_j, i) else 0
         if hops == 2:
+            # if FoF, compute number of friends in common
             try:
-                n_paths = nx.all_shortest_paths(G, source=1, target=new_j)
+                n_paths = len(succs.intersection(set(G.predecessors(new_j))))
             except Exception:
                 n_paths = 0
         else:

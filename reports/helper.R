@@ -63,13 +63,15 @@ plot_powerlaw_cdf <- function(X, title, xlab, ylab) {
 # compute Jackson's r on a degree distribution
 # based on code by Eduardo Muggenburg
 r_jackson <- function(deg_dist, m, tol=0.00000001 , r0=1.3, r1=1.7, max_iter=500){
-  LHS <- 1 - log(1 - deg_dist + 0.0001)
+  LHS <- log(1 - deg_dist + 0.000001)
   delta <- abs(r0 - r1)
+  degrees <- 1:length(deg_dist)
   k <- 1
-  while(delta > tol & k < 50){
-    RHS <- log(seq(1, length(deg_dist), 1) + r0 * m)
-    linearMod <- lm(LHS ~ 0 + RHS)
-    r1 <- summary(linearMod)$coefficients[1,1]
+  while(delta > tol & k < max_iter){
+    RHS <- log(degrees + r0 * m)
+    f <- lm(LHS ~ 0 + RHS)
+    r_tmp <- summary(f)$coefficients[1,1]
+    r1 <- (-1*r_tmp)-1
     delta <- abs(r0 - r1)
     r0 <- r1
     k <- k + 1

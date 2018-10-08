@@ -105,34 +105,54 @@ DF <- list.files("../data/graphs", pattern='g.*') %>%
     el <- rbind(data.frame(i=el$from, j=el$to),
                 data.frame(i=el$to, j=el$from)) %>%
       group_by(i) %>% summarize(deg=n())
+    # compute powerlaw fit
     fit <- plfit(el$deg, "range", seq(1.001,5,0.01))
-    vals = str_split(fn, '-')[[1]]
-    data.frame(type=vals[1], r=vals[2], p=vals[3], id=substr(vals[4], 1, 2), alpha=fit$alpha, xmin=fit$xmin)
+    # compute jacksons r
+    cdf <- el %>% group_by(deg) %>% summarize(n=n()) %>% ungroup() %>%
+      arrange(deg) %>% complete(deg=seq(max(deg)), fill=list(n=0)) %>%
+      mutate(F_d=cumsum(n)/sum(n))
+    rstar = r_jackson(cdf$F_d, mean(el$deg))
+    r_est = rstar/(1+rstar)
+    # gather results
+    vals <- str_split(fn, '-')[[1]]
+    data.frame(type=vals[1], r=vals[2], p=vals[3], id=substr(vals[4], 1, 2),
+               alpha=fit$alpha, xmin=fit$xmin, r_est=r_est)
   }, mc.cores=10) %>%
   bind_rows() %>%
   group_by(type, r, p) %>%
-  summarize(mean=mean(alpha), ll=min(alpha), ul=max(alpha)) %>% ungroup() %>%
-  mutate(r=as.numeric(r))
+  summarize(mean_a=mean(alpha), ll_a=quantile(alpha, 0.25), ul_a=quantile(alpha, 0.75),
+            mean_r=mean(r_est), ll_r=quantile(r_est, 0.25), ul_r=quantile(r_est, 0.75)
+            ) %>% ungroup() %>%
+  mutate(r=as.numeric(r)) %>%
+  # offset r slightly
+  mutate(r_off = r + (as.numeric(p)-0.5)/50)
 
-ggplot(DF, aes(x=r, y=mean, color=p)) + geom_line() +
-    #geom_segment(aes(x=r, xend=r, y=ll, yend=ul)) +  # too wide, could offset x-axis slightly
-    scale_color_brewer(palette='Set1') + 
-    scale_x_continuous("r", breaks=seq(0, 1, 0.25), labels=c('0','0.25','0.50','0.75','1')) +
-    scale_y_continuous(TeX("Estimate of $\\gamma$"), expand=c(0,0), limits=c(2.5, 5.1)) +
-    #ggtitle("Power law fits for (r,p) graphs") +
-    my_theme(11) -> p3b
+ggplot(DF, aes(x=r_off, y=mean_a, color=p)) + geom_line() +
+  geom_segment(aes(x=r_off, xend=r_off, y=ll_a, yend=ul_a)) +
+  scale_color_brewer(palette='Set1') + 
+  scale_x_continuous("r", breaks=seq(0, 1, 0.25), labels=c('0','0.25','0.50','0.75','1')) +
+  scale_y_continuous(TeX("Estimate of $\\gamma$"), expand=c(0,0), limits=c(2.5, 5.1)) +
+  ggtitle("Power law fits for (r,p) graphs") +
+  my_theme(11) -> p3a
+ggsave('../results/fig_3a.pdf', p3a, width=4.5, height=2.5)
 
+ggplot(DF, aes(x=r_off, y=mean_r, color=p)) + geom_line() +
+  geom_segment(aes(x=r_off, xend=r_off, y=ll_r, yend=ul_r)) +  # too wide, could offset x-axis slightly
+  scale_color_brewer(palette='Set1') + 
+  scale_x_continuous("r", breaks=seq(0, 1, 0.25), labels=c('0','0.25','0.50','0.75','1')) +
+  scale_y_continuous(TeX("Estimate of $r$"), expand=c(0,0), limits=c(0.05, 0.35)) +
+  ggtitle("Jackson r fits for (r,p) graphs") +
+  my_theme(11) -> p3b
 ggsave('../results/fig_3b.pdf', p3b, width=4.5, height=2.5)
 
-ggplot(DF, aes(x=r, y=2/(mean-1), color=p)) + geom_line() +
-  #geom_segment(aes(x=r, xend=r, y=2/(ll-1), yend=2/(ul-1))) +  # too wide, could offset x-axis slightly
+ggplot(DF, aes(x=r, y=2/(mean_a-1), color=p)) + geom_line() +
+  #geom_segment(aes(x=r_off, xend=r_off, y=2/(ll_a-1), yend=2/(ul_a-1))) +
   geom_hline(yintercept=1, color='grey', linetype='dashed') + geom_line() +
   scale_color_brewer(palette='Set1') + 
   scale_x_continuous("r", breaks=seq(0, 1, 0.25), labels=c('0','0.25','0.50','0.75','1')) +
-  scale_y_continuous(TeX("Estimate of p"), expand=c(0,0), limits=c(0.5, 1.3), breaks=c(0.6, 0.8, 1.0, 1.2)) +
+  scale_y_continuous(TeX("Estimate of p"), expand=c(0,0), limits=c(0.45, 1.3), breaks=c(0.6, 0.8, 1.0, 1.2)) +
   #ggtitle("Degree distribution fits for (r,p) graphs") +
   my_theme(11) -> p3
-
 ggsave('../results/fig_3.pdf', p3, width=4.5, height=2.5)
 
 

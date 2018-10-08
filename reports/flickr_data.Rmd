@@ -54,9 +54,9 @@ In/out degree
 
 ```{r plot_degdist}
 Rmisc::multiplot(
-  plot_powerlaw_cdf(nodes$n_out, title="cdf - Out links",
+  plot_powerlaw_cdf(nodes$n_out[nodes$n_out > 0], title="cdf - Out links",
                     xlab="(log) Number of Links out", ylab="(log) Number of Accounts"),
-  plot_powerlaw_cdf(nodes$n_in, title="cdf - In links",
+  plot_powerlaw_cdf(nodes$n_in[nodes$n_in > 0], title="cdf - In links",
                     xlab="(log) Number of Links in", ylab="(log) Number of Accounts"),
   cols=2
 )
@@ -82,10 +82,10 @@ r = rstar/(1+rstar)
 
 ## Model results on 2016-11-05
 
-```{r read_data}
+```{r read_data1}
 ds = '061105'
 fn <- sprintf("~/projects/choosing_to_grow/choose2grow/data/flickr-growth_choices_%s.csv", ds)
-DM <- read_csv(fn, col_types='iiiii') %>%
+DM <- read_csv(fn, col_types='iiiiii') %>%
   mutate(
     is_fof=as.factor(ifelse(is.na(hops), 0, ifelse(hops > 2, 0, 1))),
     hops_f=as.factor(ifelse(is.na(hops), 'none', ifelse(hops >=6 , '6+', as.character(hops)))),
@@ -93,11 +93,12 @@ DM <- read_csv(fn, col_types='iiiii') %>%
   )
 ```
 
-```{r sample_data}
+```{r sample_data1}
 set.seed(100)
-examples <- DM %>% distinct(choice_id) %>% sample_n(12000)
+# sort randomly
+examples <- DM %>% distinct(choice_id) %>% mutate(r=runif(22000)) %>% arrange(r)
 
-H_train <- DM %>% inner_join(head(examples, 10000), by='choice_id') %>%
+H_train <- DM %>% inner_join(head(examples, 20000), by='choice_id') %>%
      group_by(choice_id) %>% mutate(alt_id=row_number()) %>% ungroup() %>%
      select(choice_id, alt_id, y, deg:hops_f) %>%
      mlogit.data(shape="long", chid.var='choice_id', choice="y", alt.var='alt_id')
@@ -106,6 +107,12 @@ H_test <- DM %>% inner_join(tail(examples, 2000), by='choice_id') %>%
      group_by(choice_id) %>% mutate(alt_id=row_number()) %>% ungroup() %>%
      select(choice_id, alt_id, y, deg:hops_f) %>%
      mlogit.data(shape="long", chid.var='choice_id', choice="y", alt.var='alt_id')
+
+# extra "log hops" model, need to remove NAs and choice sets where choice was NA
+H_train2 <- H_train %>% 
+      filter(!is.na(hops)) %>%
+      group_by(choice_id) %>% filter(max(y)==1) %>% ungroup() %>%
+      mlogit.data(shape="long", chid.var='choice_id', choice="y", alt.var='alt_id')
 ```
 
 ```{r write_data}
@@ -115,39 +122,45 @@ H_train %>%
   write_csv("~/projects/choosing_to_grow/choose2grow/data/flickr-growth_choices_py.csv")
 ```
 
-```{r model_models}
-#f0 <- mlogit(y ~ log(deg+1) | 0, H_train)
-f1 <- mlogit(y ~ log(deg+1) + recip | 0, H_train)
-f2 <- mlogit(y ~ log(deg+1) + recip + is_fof | 0, H_train)
-f3 <- mlogit(y ~ log(deg+1) + recip + hops_f | 0, H_train)
+```{r model_models1}
+fs <- list(
+  #mlogit(y ~ log(deg+1) | 0, H_train),
+  mlogit(y ~ log(deg+1) + recip | 0, H_train),
+  mlogit(y ~              recip + is_fof | 0, H_train),
+  mlogit(y ~ log(deg+1) + recip + is_fof | 0, H_train),
+  mlogit(y ~ log(deg+1) + recip + hops_f | 0, H_train),
+  mlogit(y ~ log(deg+1) + recip + log(hops) | 0, H_train2),
+  mlogit(y ~ log(deg+1) + recip + log(n_paths+1) | 0, H_train)
+)
 ```
 
-```{r sg_text}
+```{r sg_text1}
 stargazer::stargazer(
-  f1, f2, f3,
+  fs,
   dep.var.caption = "",
   covariate.labels = c("log In-Degree", "Reciprocal", "Is FoF",
-                       "2 Hops", "3 Hops", "4 Hops", "5 Hops", "6+ Hops"),
+                       "2 Hops", "3 Hops", "4 Hops", "5 Hops", "6+ Hops",
+                       "log Hops", "log Paths"),
   header=FALSE, 
   type='text')
 ```
 
-```{r accuracy}
+```{r accuracy1}
 print("Train accuracy:")
-c(acc(f1, H_train), acc(f2, H_train), acc(f3, H_train)) %>%
-  round(4) %>% paste(collapse=' & ') %>% print()
+lapply(fs, function(x) acc(x, H_train)) %>% unlist() %>%
+   round(4) %>% paste(collapse=' & ') %>% print()
 print("Test accuracy:")
-c(acc(f1, H_test), acc(f2, H_test), acc(f3, H_test)) %>%
-  round(4) %>% paste(collapse=' & ') %>% print()
+lapply(fs, function(x) acc(x, H_test)) %>% unlist() %>%
+   round(4) %>% paste(collapse=' & ') %>% print()
 ```
 
 \newpage
-## Model results on 2017-03-01
+## Model results on 2007-03-01
 
 ```{r read_data2}
 ds = '070301'
 fn <- sprintf("~/projects/choosing_to_grow/choose2grow/data/flickr-growth_choices_%s.csv", ds)
-DM <- read_csv(fn, col_types='iiiii') %>%
+DM <- read_csv(fn, col_types='iiiiii') %>%
   mutate(
     is_fof=as.factor(ifelse(is.na(hops), 0, ifelse(hops > 2, 0, 1))),
     hops_f=as.factor(ifelse(is.na(hops), 'none', ifelse(hops >=6 , '6+', as.character(hops)))),
@@ -157,9 +170,10 @@ DM <- read_csv(fn, col_types='iiiii') %>%
 
 ```{r sample_data2}
 set.seed(200)
-examples <- DM %>% distinct(choice_id) %>% sample_n(12000)
+# sort randomly
+examples <- DM %>% distinct(choice_id) %>% mutate(r=runif(22000)) %>% arrange(r)
 
-H_train <- DM %>% inner_join(head(examples, 10000), by='choice_id') %>%
+H_train <- DM %>% inner_join(head(examples, 20000), by='choice_id') %>%
      group_by(choice_id) %>% mutate(alt_id=row_number()) %>% ungroup() %>%
      select(choice_id, alt_id, y, deg:hops_f) %>%
      mlogit.data(shape="long", chid.var='choice_id', choice="y", alt.var='alt_id')
@@ -168,30 +182,41 @@ H_test <- DM %>% inner_join(tail(examples, 2000), by='choice_id') %>%
      group_by(choice_id) %>% mutate(alt_id=row_number()) %>% ungroup() %>%
      select(choice_id, alt_id, y, deg:hops_f) %>%
      mlogit.data(shape="long", chid.var='choice_id', choice="y", alt.var='alt_id')
+
+# extra "log hops" model, need to remove NAs and choice sets where choice was NA
+H_train2 <- H_train %>% 
+      filter(!is.na(hops)) %>%
+      group_by(choice_id) %>% filter(max(y)==1) %>% ungroup() %>%
+      mlogit.data(shape="long", chid.var='choice_id', choice="y", alt.var='alt_id')
 ```
 
 ```{r model_models2}
-#f0 <- mlogit(y ~ log(deg+1) | 0, H_train)
-f1 <- mlogit(y ~ log(deg+1) + recip | 0, H_train)
-f2 <- mlogit(y ~ log(deg+1) + recip + is_fof | 0, H_train)
-f3 <- mlogit(y ~ log(deg+1) + recip + hops_f | 0, H_train)
+fs <- list(
+  mlogit(y ~ log(deg+1) + recip | 0, H_train),
+  mlogit(y ~              recip + is_fof | 0, H_train),
+  mlogit(y ~ log(deg+1) + recip + is_fof | 0, H_train),
+  mlogit(y ~ log(deg+1) + recip + hops_f | 0, H_train),
+  mlogit(y ~ log(deg+1) + recip + log(hops) | 0, H_train2),
+  mlogit(y ~ log(deg+1) + recip + log(n_paths+1) | 0, H_train)
+)
 ```
 
 ```{r sg_text2}
 stargazer::stargazer(
-  f1, f2, f3,
+  fs,
   dep.var.caption = "",
   covariate.labels = c("log In-Degree", "Reciprocal", "Is FoF",
-                       "2 Hops", "3 Hops", "4 Hops", "5 Hops", "6+ Hops"),
+                       "2 Hops", "3 Hops", "4 Hops", "5 Hops", "6+ Hops",
+                       "log Hops", "log Paths"),
   header=FALSE, 
   type='text')
 ```
 
 ```{r accuracy2}
 print("Train accuracy:")
-c(acc(f1, H_train), acc(f2, H_train), acc(f3, H_train)) %>%
-  round(4) %>% paste(collapse=' & ') %>% print()
+lapply(fs, function(x) acc(x, H_train)) %>% unlist() %>%
+   round(4) %>% paste(collapse=' & ') %>% print()
 print("Test accuracy:")
-c(acc(f1, H_test), acc(f2, H_test), acc(f3, H_test)) %>%
-  round(4) %>% paste(collapse=' & ') %>% print()
+lapply(fs, function(x) acc(x, H_test)) %>% unlist() %>%
+   round(4) %>% paste(collapse=' & ') %>% print()
 ```
