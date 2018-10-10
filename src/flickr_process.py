@@ -13,8 +13,8 @@ from datetime import datetime
 
     http://socialnetworks.mpi-sws.mpg.de/data/flickr-growth.txt.gz
 
-  input : env.data_path/flickr-growth.txt.gz
-  output: env.data_path/flickr-growth_choices.csv
+  input : data_path/flickr-growth.txt.gz
+  output: data_path/flickr-growth_choices.csv
 
 """
 

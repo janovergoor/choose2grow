@@ -21,7 +21,7 @@ from evn import data_path
   networks for selected fields of study.
 
   input : ~/mag_raw
-  output: env.data_path/mag-*.csv
+  output: data_path/mag-*.csv
 
 """
 

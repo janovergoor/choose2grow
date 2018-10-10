@@ -6,7 +6,6 @@ import random
 from glob import glob
 from scipy.optimize import approx_fprime
 
-from env import *
 """
 
   This script contains a few handy reusable utility functions,
@@ -14,6 +13,8 @@ from env import *
 
 """
 
+# path to data files
+data_path = '../data'
 # amount to smooth log(0) with
 log_smooth = 1e-8
 
@@ -92,7 +93,7 @@ def manual_ll(D, alpha=1, p=0.5):
 #
 
 
-def read_edge_list(graph, vvv=0):
+def read_edge_list(fn, vvv=0):
     """
     Read a time-steamped edge list from a csv file.
     The expected input format is: ['ts', 'from', 'to']
@@ -100,7 +101,7 @@ def read_edge_list(graph, vvv=0):
     """
     # read in the edge list
     el = []
-    with open('%s/%s' % (graphs_path, graph), 'r') as f:
+    with open(fn, 'r') as f:
         reader = csv.reader(f, delimiter=',')
         # skip header
         next(reader, None)

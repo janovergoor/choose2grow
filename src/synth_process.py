@@ -7,15 +7,15 @@ from util import *
 
   Driver script #2 - Convert edge data to choice data
 
-  This processes all graphs in `env.graphs_path`. For each graph,
-  the following data sets are produced:
+  This processes all graphs in `data_path/synth_graphs`.
+  For each graph, the following data sets are produced:
 
   * /edges - relevant network context features for every edge
   * /choices - for every edge, sampled choice set data (degree, # fof)
 
-  input : env.graphs_path/
-  output: env.data_path/edges/
-          env.data_path/choices/
+  input : data_path/synth_graphs/
+  output: data_path/edges/
+          data_path/choices/
 
 """
 
@@ -47,10 +47,10 @@ def process_all_edges(graph, n_alt=10, vvv=0):
     Read in a graph from an edge list, compute for every edge the network
     context when that edge was formed, and write out the results.
 
-    'graph' is a filename
+    'graph' is a graph identifier and file name
     """
     # read the edge list from file
-    el = read_edge_list(graph, vvv)
+    el = read_edge_list('%s/synth_graphs/%s' % (data_path, graph), vvv)
     # create initial graph
     G = nx.Graph()
     for (t, i, j) in el:
@@ -162,7 +162,7 @@ def process_all_edges(graph, n_alt=10, vvv=0):
 
 
 if __name__ == '__main__':
-    graphs = os.listdir(graphs_path)  # todo
+    graphs = os.listdir(data_path + '/synth_graphs')
     choices = os.listdir(data_path + "/choices")  # already done
     graphs = [x for x in graphs if x not in choices]
     graphs = [x for x in graphs if 'all' not in x]  # remove school networks

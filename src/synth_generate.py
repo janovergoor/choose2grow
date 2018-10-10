@@ -14,12 +14,12 @@ from util import *
 
   Each id is generated from the *same* seed graph.
 
-  output: env.graphs_path/
+  output: data_path/synth_graphs
 
 """
 
 # make sure the output folder exists
-mkdir(graphs_path)
+mkdir(data_path + '/synth_graphs')
 
 #@profile
 def make_rp_graph(id, G_in=None, n_max=10000, r=0.5, p=0.5, grow=True, m=1):
@@ -45,11 +45,11 @@ def make_rp_graph(id, G_in=None, n_max=10000, r=0.5, p=0.5, grow=True, m=1):
     # if no input graph is given, start with a default graph
     if G_in is None:
         if grow:
-            # small cycle graph for grow
-            G = nx.cycle_graph(n=5)
+            # small complete graph for grow
+            G = nx.complete_graph(5, create_using=nx.DiGraph())
         else:
             # sparse ER graph for dense
-            G = nx.erdos_renyi_graph(1000, 0.005)
+            G = nx.erdos_renyi_graph(1000, 0.005, directed=True)
     else:
         # else, copy the input graph
         G = G_in.copy()
@@ -151,11 +151,10 @@ def do_one_dense_cycle(id):
     generate an r-p graph with a densifying process.
     The same graph is reused for every value of (r,p).
     """
-    Gt = nx.erdos_renyi_graph(1000, 0.005)
+    Gt = nx.erdos_renyi_graph(1000, 0.005, directed=True)
     for p in [0, 0.25, 0.5, 0.75, 1]:
-        # TODO: replace with np.arange(0, 1.1, 0.1)
         for r in [0, 0.25, 0.5, 0.75, 1]:
-            fn = '%s/d-%.2f-%.2f-%.02d.csv' % (graphs_path, r, p, id)
+            fn = '%s/synth_graphs/d-%.2f-%.2f-%.02d.csv' % (data_path, r, p, id)
             print(fn)
             (G, el) = make_rp_graph(fn, G_in=Gt, grow=False, r=r, p=p)
             write_edge_list(el, fn)
@@ -167,7 +166,7 @@ def do_one_grow_cycle(id):
     """
     for p in [0, 0.25, 0.5, 0.75, 1]:
         for r in [0, 0.25, 0.5, 0.75, 1]:
-            fn = '%s/g-%.2f-%.2f-%.02d.csv' % (graphs_path, r, p, id)
+            fn = '%s/synth_graphs/g-%.2f-%.2f-%.02d.csv' % (data_path, r, p, id)
             print(fn)
             (G, el) = make_rp_graph(fn, m=4, r=r, p=p)
             write_edge_list(el, fn)

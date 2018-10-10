@@ -7,7 +7,7 @@ from multiprocessing import Pool
 
   Driver script #3 - Fit models
 
-  input : env.data_path/choices/
+  input : data_path/choices/
   output: ./results/
 
   python analyze.py > ../results/r_vs_p_synth.csv
