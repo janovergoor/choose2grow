@@ -1,6 +1,7 @@
 suppressPackageStartupMessages(library(ggplot2))
 library(mlogit)
 library(scales)
+library(pROC)
 library(Rmisc)
 library(stringr)
 library(tidyr)
@@ -82,13 +83,41 @@ r_jackson <- function(deg_dist, m, tol=0.00000001 , r0=1.3, r1=1.7, max_iter=500
 # compute the accuracy of a model on new data
 acc <- function(f, data) {
   # compute predictions
-  P = predict(f, newdata=data) %>% as.data.frame()
+  P <- predict(f, newdata=data) %>% as.data.frame()
+  dp <- P %>% mutate(choice_id=rownames(P)) %>% gather(choice, score, -choice_id)
   inner_join(
     # actuals
     data %>% filter(y) %>% select(choice_id, correct=alt_id) %>% mutate(choice_id=as.character(choice_id)),
     # predicted
-    P %>% mutate(choice_id=rownames(P)) %>% gather(choice, score, -choice_id) %>% group_by(choice_id) %>% filter(score==max(score)),
+    dp %>%
+      # sort by score and random to break ties randomly
+      mutate(r=runif(nrow(dp))) %>% group_by(choice_id) %>% arrange(-score, r) %>%
+      # take highest score
+      mutate(n=row_number()) %>% filter(n==1),
     by='choice_id'
   ) %>% ungroup() %>%
     summarize(acc=mean(choice==correct)) %>% .$acc %>% as.numeric()
+}
+
+# compute the AUC of a model on new data
+auc <- function(f, data) {
+  # compute predictions
+  P <- predict(f, newdata=data) %>% as.data.frame()
+  dp <- P %>% mutate(choice_id=rownames(P)) %>% gather(choice, score, -choice_id)
+  inner_join(
+    # actuals
+    data %>% filter(y) %>% select(choice_id, correct=alt_id) %>% mutate(choice_id=as.character(choice_id)),
+    # predicted
+    dp %>%
+      # sort by score and random to break ties randomly
+      mutate(r=runif(nrow(dp))) %>% group_by(choice_id) %>% arrange(-score, r) %>%
+      # take highest score
+      mutate(n=row_number()) %>% filter(n==1),
+    by='choice_id'
+  ) %>% ungroup() -> x
+  # shuffle classes to be able to do multi-class AUC
+  x$correct2 <- sample(1:25, nrow(x), replace=T)
+  x$choice2 <- ifelse(x$choice==1, x$correct2, x$choice) # 1/25 chance of wrongly getting the 'right' answer
+  #x$choice2 <- ifelse(x$choice!=1 & x$correct2==x$choice2, , x$choice2)
+  as.numeric(multiclass.roc(as.numeric(x$correct2), as.numeric(x$choice2), quiet=T)$auc)
 }

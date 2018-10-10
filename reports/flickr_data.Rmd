@@ -145,13 +145,15 @@ stargazer::stargazer(
   type='text')
 ```
 
-```{r accuracy1}
-print("Train accuracy:")
-lapply(fs, function(x) acc(x, H_train)) %>% unlist() %>%
-   round(4) %>% paste(collapse=' & ') %>% print()
-print("Test accuracy:")
-lapply(fs, function(x) acc(x, H_test)) %>% unlist() %>%
-   round(4) %>% paste(collapse=' & ') %>% print()
+```{r acc1}
+print(paste("Train accuracy  &  ",
+    lapply(fs, function(x) acc(x, H_train)) %>% unlist() %>% round(4) %>% paste(collapse=' & '), ' \\'))
+print(paste("Test accuracy   &  ",
+    lapply(fs, function(x) acc(x, H_test)) %>% unlist() %>% round(4) %>% paste(collapse=' & '), ' \\'))
+```
+```{r auc1}
+print(paste("Test AUC        &  ",
+    lapply(fs, function(x) auc(x, H_test)) %>% unlist() %>% round(3) %>% paste(collapse=' & '), ' \\'))
 ```
 
 \newpage
@@ -212,11 +214,14 @@ stargazer::stargazer(
   type='text')
 ```
 
-```{r accuracy2}
-print("Train accuracy:")
-lapply(fs, function(x) acc(x, H_train)) %>% unlist() %>%
-   round(4) %>% paste(collapse=' & ') %>% print()
-print("Test accuracy:")
-lapply(fs, function(x) acc(x, H_test)) %>% unlist() %>%
-   round(4) %>% paste(collapse=' & ') %>% print()
+```{r acc2}
+print(paste("Train accuracy  &  ",
+    lapply(fs, function(x) acc(x, H_train)) %>% unlist() %>% round(4) %>% paste(collapse=' & '), ' \\'))
+print(paste("Test accuracy   &  ",
+    lapply(fs, function(x) acc(x, H_test)) %>% unlist() %>% round(4) %>% paste(collapse=' & '), ' \\'))
 ```
+```{r auc2}
+print(paste("Test AUC        &  ",
+    lapply(fs, function(x) auc(x, H_test)) %>% unlist() %>% round(3) %>% paste(collapse=' & '), ' \\'))
+```
+
