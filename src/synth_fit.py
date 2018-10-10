@@ -10,7 +10,7 @@ from multiprocessing import Pool
   input : data_path/choices/
   output: ./results/
 
-  python analyze.py > ../results/r_vs_p_synth.csv
+  python synth_fit.py > ../results/r_vs_p_synth.csv
 
 """
 
@@ -21,20 +21,14 @@ def fit_one(fn):
     Used for the analysis in section 5.1 of the paper.
     """
 
-    # 1) fit mis-specified single log-degree model
-    # TODO: remove?
-    m1 = LogDegreeModel(fn, vvv=0)
-    m1.fit()
-    print("%s,%s,%.5f,%.3f" % (fn[:-4], "p-single", m1.u[0], m1.ll()))
-
-    # 2) fit mis-specified mixed log-degree model
+    # 1) fit mis-specified p-model
     m2 = MixedLogitModel(fn, vvv=0)
     m2.add_uniform_model()
     m2.add_log_degree_model(bounds=((1, 1),))  # clamped at alpha=1
     m2.fit(etol=0.01, n_rounds=100, return_stats=False)
     print("%s,%s,%.5f,%.3f" % (fn[:-4], "p-mixed", m2.pk[1], m2.ll()))
 
-    # 3) fit well-specified mixed r-p model
+    # 2) fit well-specified mixed (r,p)-model
     m3 = MixedLogitModel(fn, vvv=0)
     m3.add_uniform_model()
     m3.add_log_degree_model(bounds=((1, 1),))  # clamped

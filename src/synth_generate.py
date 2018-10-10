@@ -73,7 +73,7 @@ def make_rp_graph(id, G_in=None, n_max=10000, r=0.5, p=0.5, grow=True, m=1):
         m_node = 0
         # pre-fill node-sets
         # gather all distinct friends
-        friends = set(G.neighbors(i))
+        friends = set(G.successors(i))
         # all nodes except for friends and self are eligible
         eligible = set(G.nodes()) - friends - set([i])
         # subtract friends from FoFs to get eligible FoFs
@@ -90,7 +90,7 @@ def make_rp_graph(id, G_in=None, n_max=10000, r=0.5, p=0.5, grow=True, m=1):
             if j is not None:
                 friends = friends.union(set([j]))
                 eligible = eligible - set([j])
-                ego2 = ego2.union(G.neighbors(j))
+                ego2 = ego2.union(G.successors(j))
                 eligible_fofs = ego2 - friends
             # don't do anything if there are no eligible nodes
             if len(eligible) == 0:
@@ -112,7 +112,7 @@ def make_rp_graph(id, G_in=None, n_max=10000, r=0.5, p=0.5, grow=True, m=1):
                     j = list(choice_set)[0]
                 else:
                     # sample according to degree
-                    ds = dict(G.degree(choice_set))
+                    ds = dict(G.in_degree(choice_set))
                     vals = ds.values()
                     sum_vals = sum(vals)*1.0
                     ps = [x / sum_vals for x in vals]

@@ -6,7 +6,7 @@ This code and data repository accompanies the paper
 
 For questions, please email Jan at overgoor@stanford.edu.
 
-The code for fitting logit models, as well as the code to generate the synthetic graphs for section 5.1, are both written in Python 3. The code for creating the graphs is written in R.
+The code for fitting logit models, as well as the code to generate the synthetic graphs for section 5.1, is written in Python 3. The code for creating the graphs and analysis is written in R.
 
 To reproduce the results from Section 5.1, follow these steps (from the `/src` folder):
 
@@ -23,7 +23,7 @@ For the results from Section 5.2, follow these steps:
 
 For the results from Section 5.3, follow these steps:
 
-1. Download the MAG data with the following Bash code:
+1. Download the Microsoft Academic Graph data with the following Bash code:
     ```
     mkdir ~/mag_raw
     cd mag_raw
@@ -33,5 +33,5 @@ For the results from Section 5.3, follow these steps:
        unzip mag_papers_$i.zip
     done
     ```
-2. Process the MAG data with `python mag_process.py`.
+2. Process the data with `python mag_process.py`.
 2. Build the RMarkdown report with `R -e "rmarkdown::render('reports/mag_climatology.Rmd', output_file='reports/mag_climatology.pdf')"`.
