@@ -161,17 +161,23 @@ ggsave('../results/fig_3.pdf', p3, width=4.5, height=2.5)
 ## Figure 4 - Attachment function comparing Newman,Pham,degree-model
 ##
 
+# import env
 # import logit
-# m = logit.DegreeModel('g-1.00-1.00-00.csv', vvv=1, max_deg=100)
+# import synth_generate
+# import synth_process
+# (G, el) = synth_generate.make_rp_graph('test', n_max=20000, r=1, p=1, m=1, grow=True)
+# fn = '%s/graphs/test_pa.csv' % env.data_path
+# synth_generate.write_edge_list(el, fn)
+# synth_process.process_all_edges('test_pa.csv', n_alt=20, vvv=0)
+# m = logit.DegreeModel('test_pa.csv', vvv=1, max_deg=100)
 # m.fit()
 # for i in range(len(m.u)):
 #     print("%d,%f,%f" % (i, m.u[i], m.se[i]))
 logit <- read_csv("../results/deg_fit.csv", col_types='idd')
-# adjust such that k=4 is the reference point
-logit$coef <- logit$coef + abs(logit$coef[5]) + 1
+logit$coef <- exp(logit$coef)
 
 p <- 1
-d <- read_csv(sprintf("../data/choices_grouped/g-1.00-%.2f-00.csv", p), col_types='iiii')
+d <- read_csv(sprintf("../data/choices_grouped/test_pa.csv", p), col_types='iiii')
 DF <- d %>%
   filter(c==1) %>%
   inner_join(d %>% group_by(choice_id) %>% summarize(tot=sum(n)), by='choice_id') %>%
@@ -181,19 +187,22 @@ DF <- d %>%
   left_join(d %>% group_by(deg) %>% summarize(w=1/n()), by='deg')
 
 DF <- rbind(
-    DF %>% select(deg, stat) %>% mutate(type='Newman'),
-    DF %>% mutate(stat=stat*w) %>% select(deg,stat) %>% mutate(type='Pham et al.'),
-    logit %>% select(deg, stat=coef) %>% mutate(type='Logit'))
+    DF %>% select(deg, stat) %>% mutate(type='Newman [36]'),
+    DF %>% mutate(stat=stat*w) %>% select(deg,stat) %>% mutate(type='Newman\nCorrected [39]'),
+    logit %>% select(deg, stat=coef) %>% mutate(type='Conditional\nLogit'))
 
 DF %>%
-  inner_join(DF %>% filter(deg==4) %>% select(type, ref=stat), by=c('type')) %>%
-  filter(deg > 3, deg < 101) %>%
-  mutate(stat=stat/ref) %>%
+  inner_join(DF %>% filter(deg==1) %>% select(type, ref=stat), by=c('type')) %>%
+  filter(deg > 0, deg < 101) %>%
+  mutate(
+    stat=stat/ref,
+    type=factor(type, levels=c('Conditional\nLogit','Newman [36]','Newman\nCorrected [39]'))
+  ) %>%
   ggplot(aes(deg, stat, color=type)) + geom_point(shape=20, alpha=0.7) +
-    scale_x_log10("log Degree", limits=c(4, 100), labels=trans_format('log10', math_format(10^.x)), breaks=c(10^1, 10^1.5, 10^2)) +
+    scale_x_log10("log Degree", limits=c(1, 100), labels=trans_format('log10', math_format(10^.x)), breaks=c(10^0, 10^1, 10^2)) +
     scale_y_log10("Relative likelihood", limits=c(1, 110), labels=trans_format('log10', math_format(10^.x))) +
     scale_color_brewer(palette='Set1') + 
-    my_theme() + theme(legend.title=element_blank()) -> p4
+    my_theme() + theme(legend.title=element_blank(), legend.position=c(0.14, 0.78)) -> p4
 
-ggsave('../results/fig_4.pdf', p4, width=4.5, height=2.5)
+ggsave('../results/fig_4.pdf', p4, width=4, height=2.5)
 

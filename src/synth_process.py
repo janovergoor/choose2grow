@@ -137,6 +137,18 @@ def process_all_edges(graph, n_alt=10, vvv=0):
     if vvv > 1:
         print("[%s] did edges" % graph)
 
+    # write full choice sets
+    fn = '%s/%s/%s' % (data_path, 'choices_grouped', graph)
+    with open(fn, 'w') as f:
+        writer = csv.writer(f)
+        writer.writerow(['choice_id', 'deg', 'n', 'c'])
+        for e in range(len(T)):
+            for deg, n in T[e]['degree_distribution'].items():
+                c = 1 if deg == T[e]['deg_j'] else 0
+                writer.writerow([e, deg, n, c])
+    if vvv > 1:
+        print("[%s] did grouped choices" % graph)
+
     # write negatively sampled (degree, fof) choice sets
     fn = '%s/%s/%s' % (data_path, 'choices', graph)
     with open(fn, 'w') as f:
