@@ -20,7 +20,7 @@ from util import *
 """
 
 # make sure all the output folders are there
-for folder in ['edges', 'choices']:
+for folder in ['edges', 'choices', 'choices_grouped']:
     mkdir('%s/%s' % (data_path, folder))
 
 
@@ -165,7 +165,6 @@ if __name__ == '__main__':
     graphs = os.listdir(data_path + '/synth_graphs')
     choices = os.listdir(data_path + "/choices")  # already done
     graphs = [x for x in graphs if x not in choices]
-    graphs = [x for x in graphs if 'all' not in x]  # remove school networks
     print("TODO: %d" % len(graphs))
     with Pool(processes=20) as pool:
         r = pool.map(process_all_edges, graphs)
