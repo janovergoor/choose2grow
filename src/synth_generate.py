@@ -73,7 +73,7 @@ def make_rp_graph(id, G_in=None, n_max=10000, r=0.5, p=0.5, grow=True, m=1):
         m_node = 0
         # pre-fill node-sets
         # gather all distinct friends
-        friends = set(G.successors(i))
+        friends = set(nx.ego_graph(G, i, 1).nodes())
         # all nodes except for friends and self are eligible
         eligible = set(G.nodes()) - friends - set([i])
         # subtract friends from FoFs to get eligible FoFs
@@ -113,8 +113,9 @@ def make_rp_graph(id, G_in=None, n_max=10000, r=0.5, p=0.5, grow=True, m=1):
                 else:
                     # sample according to degree
                     ds = dict(G.in_degree(choice_set))
-                    vals = ds.values()
-                    sum_vals = sum(vals)*1.0
+                    # add 1 to give new nodes a chance
+                    vals = [x + 1 for x in ds.values()]
+                    sum_vals = sum(vals) * 1.0
                     ps = [x / sum_vals for x in vals]
                     # could switch to np.random.multinomial
                     j = np.random.choice(list(ds.keys()), size=1, p=ps)[0]
@@ -168,12 +169,12 @@ def do_one_grow_cycle(id):
         for r in [0, 0.25, 0.5, 0.75, 1]:
             fn = '%s/synth_graphs/g-%.2f-%.2f-%.02d.csv' % (data_path, r, p, id)
             print(fn)
-            (G, el) = make_rp_graph(fn, m=4, r=r, p=p)
+            (G, el) = make_rp_graph(fn, m=5, r=r, p=p)
             write_edge_list(el, fn)
 
 
 if __name__ == '__main__':
-    n = 10
+    n = 20
     # Run cycles in parallel
     with Pool(processes=n) as pool:
         r = pool.map(do_one_dense_cycle, range(n))
