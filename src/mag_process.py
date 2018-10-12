@@ -1,27 +1,15 @@
 import json
 import csv
 import os
-from evn import data_path
+from util import data_path
 
 """
 
   Script to process data for analysis in section 5.3 of the paper.
-  First, download the data with the following bash code:
-
-      mkdir ~/mag_raw
-      cd mag_raw
-      for i in {0..8}
-      do
-         wget -4 https://academicgraphv1wu.blob.core.windows.net/aminer/mag_papers_$i.zip
-         unzip mag_papers_$i.zip
-      done
-
-  Then run this script with `python mag_process.py`.
-  This will iterate through all the data, and create subsampled
-  networks for selected fields of study.
+  Make sure the data has been downloaded first.
 
   input : ~/mag_raw
-  output: env.data_path/mag-*.csv
+  output: data_path/mag-*.csv
 
 """
 

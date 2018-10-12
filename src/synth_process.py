@@ -7,20 +7,20 @@ from util import *
 
   Driver script #2 - Convert edge data to choice data
 
-  This processes all graphs in `env.graphs_path`. For each graph,
-  the following data sets are produced:
+  This processes all graphs in `data_path/synth_graphs`.
+  For each graph, the following data sets are produced:
 
   * /edges - relevant network context features for every edge
   * /choices - for every edge, sampled choice set data (degree, # fof)
 
-  input : env.graphs_path/
-  output: env.data_path/edges/
-          env.data_path/choices/
+  input : data_path/synth_graphs/
+  output: data_path/edges/
+          data_path/choices/
 
 """
 
 # make sure all the output folders are there
-for folder in ['edges', 'choices']:
+for folder in ['edges', 'choices', 'choices_grouped']:
     mkdir('%s/%s' % (data_path, folder))
 
 
@@ -47,12 +47,14 @@ def process_all_edges(graph, n_alt=10, vvv=0):
     Read in a graph from an edge list, compute for every edge the network
     context when that edge was formed, and write out the results.
 
-    'graph' is a filename
+    'graph' is a graph identifier and file name
     """
     # read the edge list from file
-    el = read_edge_list(graph, vvv)
+    el = read_edge_list('%s/synth_graphs/%s' % (data_path, graph), vvv)
+    # is directed?
+    directed = '-d-' in graph
     # create initial graph
-    G = nx.Graph()
+    G = nx.DiGraph() if directed else nx.Graph()
     for (t, i, j) in el:
         if t == 0:
             G.add_edge(i, j)
@@ -66,7 +68,8 @@ def process_all_edges(graph, n_alt=10, vvv=0):
             continue
         G.add_nodes_from([i, j])  # add nodes
         # create degree distribution dictionary
-        degs = Counter(dict(G.degree()).values())
+        degs = dict(G.in_degree() if directed else G.degree())
+        degs_counter = Counter(degs.values())
         # create # fof paths dictionary
         paths = fof_paths(G, i)
         # retrieve fof_deg for j
@@ -92,14 +95,14 @@ def process_all_edges(graph, n_alt=10, vvv=0):
             'n_elig': len(eligible_js),
             # number of eligible nodes that are friends of friends
             'n_elig_fof': len(eligible_fofs),
-            # degree of the connected to node (j)
-            'deg_i': G.degree(i),
+            # degree of the connecting node (i)
+            'deg_i': degs[i],
             # number of nodes with degree 'deg'
-            'n_deg_i': float(degs[G.degree(i)]),
+            'n_deg_i': float(degs_counter[degs[i]]),
             # degree of the connected to node (j)
-            'deg_j': G.degree(j),
+            'deg_j': degs[j],
             # number of nodes with degree 'deg'
-            'n_deg_j': float(Counter(dict(G.degree()).values())[G.degree(j)]),
+            'n_deg_j': float(degs_counter[degs[j]]),
             # number of length-2 paths between i and j
             'fof_deg': fof_deg,
             # number of nodes with same amount of fof_paths
@@ -107,10 +110,10 @@ def process_all_edges(graph, n_alt=10, vvv=0):
             # total length-2 paths from i
             'tot_fof': sum(paths.values()),
             # total degree distribution
-            'degree_distribution': Counter(list(dict(G.degree()).values())),
+            'degree_distribution': degs_counter,
             # negative sampled data for MLN estimation
             'mln_data': [(1 if k == j else 0,  # chosen?
-                          G.degree(k),  # degree
+                          degs[k],  # degree
                           paths[k] if k in paths else 0  # number of FoF paths
                           ) for k in mln_sample]
         })
@@ -162,10 +165,9 @@ def process_all_edges(graph, n_alt=10, vvv=0):
 
 
 if __name__ == '__main__':
-    graphs = os.listdir(graphs_path)  # todo
+    graphs = os.listdir(data_path + '/synth_graphs')
     choices = os.listdir(data_path + "/choices")  # already done
-    graphs = [x for x in graphs if x not in choices]
-    graphs = [x for x in graphs if 'all' not in x]  # remove school networks
+    graphs = [x for x in graphs if x not in choices and x != '.DS_Store']
     print("TODO: %d" % len(graphs))
-    with Pool(processes=20) as pool:
+    with Pool(processes=10) as pool:
         r = pool.map(process_all_edges, graphs)
