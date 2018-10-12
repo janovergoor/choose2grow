@@ -115,7 +115,7 @@ def read_edge_list(fn, vvv=0):
                     row = [row[2], row[0], row[1]]
             el.append([int(x) for x in row])
     if vvv > 0:
-        print("[%s] read %d edges" % (graph, len(el)))
+        print("[%s] read %d edges" % (fn, len(el)))
     return el
 
 

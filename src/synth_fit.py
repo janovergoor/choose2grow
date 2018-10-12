@@ -26,7 +26,7 @@ def fit_one(fn):
     m2.add_uniform_model()
     m2.add_log_degree_model(bounds=((1, 1),))  # clamped at alpha=1
     m2.fit(etol=0.01, n_rounds=100, return_stats=False)
-    print("%s,%s,%.5f,%.3f" % (fn[:-4], "p-mixed", m2.pk[1], m2.ll()))
+    print("%s,%s,%.5f,%.3f" % (fn[:-4], "p-mixed", m2.pk[0], m2.ll()))
 
     # 2) fit well-specified mixed (r,p)-model
     m3 = MixedLogitModel(fn, vvv=0)
@@ -35,13 +35,13 @@ def fit_one(fn):
     m3.add_uniform_fof_model()
     m3.add_log_degree_fof_model(bounds=((1, 1),))  # clamped
     m3.fit(etol=0.01, n_rounds=200, return_stats=False)
-    print("%s,%s,%.5f,%.3f" % (fn[:-4], "rp-mixed", m3.pk[1] + m3.pk[3], m3.ll()))
+    print("%s,%s,%.5f,%.3f" % (fn[:-4], "rp-mixed", m3.pk[0] + m3.pk[2], m3.ll()))
 
 
 if __name__ == '__main__':
     graphs = os.listdir(data_path + "/choices")
     print("fn,model,estimate,ll")
     # run fits in parallel
-    with Pool(processes=30) as pool:
+    with Pool(processes=10) as pool:
         r = pool.map(fit_one, graphs)
     # TODO: write all to one file, rather than hacky pipe

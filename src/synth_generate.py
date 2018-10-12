@@ -10,7 +10,7 @@ from util import *
   a number of graphs, and writes them out as ordered edge lists.
   The structure of the filename is:
 
-      "%s-%.2f-%.2f-%.02d.csv" % ({d,g}, r, p, id)
+      "%s-%.2f-%.2f-%s-%.02d.csv" % ({d,g}, r, p, {u,d}, id)
 
   Each id is generated from the *same* seed graph.
 
@@ -22,9 +22,9 @@ from util import *
 mkdir(data_path + '/synth_graphs')
 
 #@profile
-def make_rp_graph(id, G_in=None, n_max=10000, r=0.5, p=0.5, grow=True, m=1):
+def make_rp_graph(id, G_in=None, n_max=10000, r=0.5, p=0.5, grow=True, m=1, directed=False):
     """
-    Generate a graph with n_max edges according to the r-p model, which
+    Generate a graph with n_max edges according to the (r,p)-model, which
     forms edges according to both preferential attachment and triadic closure.
 
     If grow=True, the graph will be grown (using G_in as seed) as a
@@ -35,10 +35,10 @@ def make_rp_graph(id, G_in=None, n_max=10000, r=0.5, p=0.5, grow=True, m=1):
 
     For every new edge, random sample from two uniform random variables (P, R)
     and create a new edge between i and j, with j selected as follows:
-    P>p & R<r - draw j uniformly at random
-    P>p & R>r - draw j uniformly at random from the set of i's FoFs
-    P<p & R<r - draw j based on j's degree
-    P<p & R>r - draw k based on j's degree from the set of i's FoFs
+    P<p & R<r - draw j uniformly at random
+    P<p & R>r - draw j uniformly at random from the set of i's FoFs
+    P>p & R<r - draw j based on j's degree
+    P>p & R>r - draw k based on j's degree from the set of i's FoFs
 
     The function returns an ordered edge list.
     """
@@ -46,10 +46,13 @@ def make_rp_graph(id, G_in=None, n_max=10000, r=0.5, p=0.5, grow=True, m=1):
     if G_in is None:
         if grow:
             # small complete graph for grow
-            G = nx.complete_graph(5, create_using=nx.DiGraph())
+            if directed:
+                G = nx.complete_graph(5, create_using=nx.DiGraph())
+            else:
+                G = nx.complete_graph(5)
         else:
             # sparse ER graph for dense
-            G = nx.erdos_renyi_graph(1000, 0.005, directed=True)
+            G = nx.erdos_renyi_graph(1000, 0.005, directed=directed)
     else:
         # else, copy the input graph
         G = G_in.copy()
@@ -83,14 +86,12 @@ def make_rp_graph(id, G_in=None, n_max=10000, r=0.5, p=0.5, grow=True, m=1):
         j = None
         # create each edge separately
         while m_node < m:
-            # intermediate print-out
-            if len(G.edges()) % 5000 == 0:
-                print("Done %d" % len(G.edges()))
             # add j to node sets if it is defined
             if j is not None:
                 friends = friends.union(set([j]))
                 eligible = eligible - set([j])
-                ego2 = ego2.union(G.successors(j))
+                js_friends = G.successors(j) if directed else G.neighbors(j)
+                ego2 = ego2.union(js_friends)
                 eligible_fofs = ego2 - friends
             # don't do anything if there are no eligible nodes
             if len(eligible) == 0:
@@ -104,7 +105,7 @@ def make_rp_graph(id, G_in=None, n_max=10000, r=0.5, p=0.5, grow=True, m=1):
             else:
                 # sample from FoFs only
                 choice_set = eligible_fofs
-            if P > p:
+            if P < p:
                 # sample uniformly
                 j = random_sample(choice_set)
             else:
@@ -112,9 +113,10 @@ def make_rp_graph(id, G_in=None, n_max=10000, r=0.5, p=0.5, grow=True, m=1):
                     j = list(choice_set)[0]
                 else:
                     # sample according to degree
-                    ds = dict(G.in_degree(choice_set))
+                    ds = G.in_degree(choice_set) if directed else G.degree(choice_set)
+                    ds = dict(ds)
                     # add 1 to give new nodes a chance
-                    vals = [x + 1 for x in ds.values()]
+                    vals = ds.values()
                     sum_vals = sum(vals) * 1.0
                     ps = [x / sum_vals for x in vals]
                     # could switch to np.random.multinomial
@@ -146,37 +148,34 @@ def write_edge_list(T, fn):
             writer.writerow([t, i, j])
 
 
-def do_one_dense_cycle(id):
+def pass_through(graph):
     """
-    Generate a small random graph, and for each value of r and p,
-    generate an r-p graph with a densifying process.
-    The same graph is reused for every value of (r,p).
+    Make a graph according to the specs in the id string and write it out.
     """
-    Gt = nx.erdos_renyi_graph(1000, 0.005, directed=True)
-    for p in [0, 0.25, 0.5, 0.75, 1]:
-        for r in [0, 0.25, 0.5, 0.75, 1]:
-            fn = '%s/synth_graphs/d-%.2f-%.2f-%.02d.csv' % (data_path, r, p, id)
-            print(fn)
-            (G, el) = make_rp_graph(fn, G_in=Gt, grow=False, r=r, p=p)
-            write_edge_list(el, fn)
-
-
-def do_one_grow_cycle(id):
-    """
-    For each value of r and p, generate an r-p graph with a growing process.
-    """
-    for p in [0, 0.25, 0.5, 0.75, 1]:
-        for r in [0, 0.25, 0.5, 0.75, 1]:
-            fn = '%s/synth_graphs/g-%.2f-%.2f-%.02d.csv' % (data_path, r, p, id)
-            print(fn)
-            (G, el) = make_rp_graph(fn, m=5, r=r, p=p)
-            write_edge_list(el, fn)
+    print(graph)
+    (type1, r, p, type2, id) = graph.split('-')
+    if type1 not in ['g', 'd'] or type2 not in ['d', 'u']:
+        print("[ERROR] id format should be [gd]-%.2f-%.2f-[ud]-.02d")
+    (G, el) = make_rp_graph(id, n_max=10000 if type1 == 'g' else 10000,
+                            r=float(r), p=float(p),
+                            grow=type1 == 'g',
+                            m=4 if type1 == 'g' else 1,
+                            directed=type2 == 'd')
+    fn = '%s/synth_graphs/%s.csv' % (data_path, graph)
+    write_edge_list(el, fn)
 
 
 if __name__ == '__main__':
-    n = 20
+    n = 10
+    todo = []
+    for type1 in ['g', 'd']:
+        for type2 in ['u', 'd']:
+            for p in [0.00, 0.25, 0.5, 0.75, 0.99]:
+                for r in [0.01, 0.25, 0.5, 0.75, 1.00]:
+                    for id in range(n):
+                        fn = '%s-%.2f-%.2f-%s-%.02d' % (type1, r, p, type2, id)
+                        todo.append(fn)
+    print("TODO: %d" % len(todo))
     # Run cycles in parallel
-    with Pool(processes=n) as pool:
-        r = pool.map(do_one_dense_cycle, range(n))
-    with Pool(processes=n) as pool:
-        r = pool.map(do_one_grow_cycle, range(n))
+    with Pool(processes=10) as pool:
+        r = pool.map(pass_through, todo)
