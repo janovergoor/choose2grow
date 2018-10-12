@@ -8,8 +8,10 @@ library(parallel)
 library(tidyr)
 library(readr)
 library(scales)
+library(dplyr)
 
 setwd("~/projects/choosing_to_grow/choose2grow/src")
+#source('../reports/helper.R')
 
 
 my_theme <- function(base_size=9) {
@@ -41,8 +43,9 @@ my_theme <- function(base_size=9) {
 ## Figure 1 - estimates of p by PA and PA-FoF models
 ##
 DF <- read_csv("../results/r_vs_p_synth.csv", col_types='ccdd') %>%
-      separate(fn, into=c("type","r","p","id"), sep='-') %>%
-      group_by(type, r, p, model) %>%
+      separate(fn, into=c("type","r","p","type2","id"), sep='-') %>%
+      filter(p != '0.00', p != '0.99') %>%
+      group_by(type, r, p, type2, model) %>%
       summarize(LL=-1*mean(ll), mean=mean(estimate),
                 ll=min(estimate), ul=max(estimate),
                 n=n()) %>%
@@ -50,12 +53,13 @@ DF <- read_csv("../results/r_vs_p_synth.csv", col_types='ccdd') %>%
       mutate(
         Model=model,
         Type=ifelse(type=='g', 'External / Growth', 'Internal / Densify'),
+        Type2=ifelse(type2=='d', 'Directed', 'Undirected'),
         r=as.numeric(r),
         P=paste0('p=', p)
       )
 
 DF %>%
-  filter(type=='g') %>%
+  filter(type=='g', type2=='u') %>%
   mutate(Model=ifelse(Model=='p-mixed', 'PA', 'PA-FoF')) %>%
   ggplot(aes(r, mean, color=p)) +
     geom_line() + #geom_point() +
@@ -70,7 +74,7 @@ ggsave('../results/fig_1.pdf', p, width=6, height=3)
 DF %>%
   mutate(Model=ifelse(Model=='p-mixed', 'PA', 'PA-FoF')) %>%
   ggplot(aes(r, mean, color=p)) +
-    geom_line() + geom_point() +
+    geom_line(aes(linetype=Type2)) + #geom_point() +
     geom_segment(aes(x=r, xend=r, y=ll, yend=ul)) +
     facet_grid(Type ~ Model) +
     scale_color_brewer(palette='Set1') + 
@@ -82,8 +86,7 @@ ggsave('../results/fig_1a.pdf', p, width=6, height=4)
 ## Figure 1b - LL by PA and PA-FoF models
 ## currently not in the paper
 DF %>%
-  filter(Model != 'p-single') %>%
-  mutate(Model=ifelse(Model=='p-mixed', 'PA', 'PA-FoF')) %>%
+  filter(type2=='u') %>%
   ggplot(aes(r, LL, color=Model)) +
     geom_line() +
     facet_grid(Type ~ P, scales='free_y') +
@@ -117,48 +120,56 @@ DF <- list.files("../data/synth_graphs", pattern='[gd].*') %>%
     r_est = rstar/(1+rstar)
     # gather results
     vals <- str_split(fn, '-')[[1]]
-    data.frame(type=vals[1], r=vals[2], p=vals[3], id=substr(vals[4], 1, 2),
+    data.frame(type=vals[1], r=vals[2], p=vals[3], type2=vals[4], id=substr(vals[5], 1, 2),
                alpha=fit$alpha, xmin=fit$xmin, r_est=r_est)
   }, mc.cores=10) %>%
   bind_rows() %>%
-  group_by(type, r, p) %>%
+  group_by(type, r, p, type2) %>%
   summarize(mean_a=mean(alpha), ll_a=quantile(alpha, 0.25), ul_a=quantile(alpha, 0.75), # ll_a=min(alpha), ul_a=max(alpha),
             mean_r=mean(r_est), ll_r=quantile(r_est, 0.25), ul_r=quantile(r_est, 0.75)
             ) %>% ungroup() %>%
-  mutate(r=as.numeric(r)) %>%
-  # offset r slightly
-  mutate(r_off = r + (as.numeric(p)-0.5)/50)
+  mutate(
+    r=as.numeric(r),
+    # offset r slightly
+    r_off = r + (as.numeric(p)-0.5)/50,
+    Type=ifelse(type=='g', 'External / Growth', 'Internal / Densify'),
+    Type2=ifelse(type2=='d', 'Directed', 'Undirected'),
+    # compute p_hat
+    p_hat=ifelse(type2=='d', (mean_a-2)/(mean_a-1), (mean_a-3)/(mean_a-1))
+  )
+  
 
-DF %>% filter(type == 'g') %>%
-ggplot(aes(x=r_off, y=mean_a, color=p)) + geom_line() +
+DF %>%
+  ggplot(aes(x=r_off, y=mean_a, color=p)) + geom_line() +
   geom_segment(aes(x=r_off, xend=r_off, y=ll_a, yend=ul_a)) +
   scale_color_brewer(palette='Set1') + 
   scale_x_continuous("r", breaks=seq(0, 1, 0.25), labels=c('0','0.25','0.50','0.75','1')) +
   scale_y_continuous(TeX("Estimate of $\\gamma$"), expand=c(0,0), limits=c(1.5, 5.1)) +
-  ggtitle("Power law fits for (r,p) graphs") +
+  ggtitle("Power law fits for (r,p) graphs") + facet_grid(Type2 ~ Type) +
+  geom_hline(data=data.frame(y=c(2,3), Type2=c('Directed','Undirected')), aes(yintercept=y), color='lightgrey', linetype='dashed') +
   my_theme(11) -> p
-ggsave('../results/fig_2a.pdf', p, width=4.5, height=2.5)
+ggsave('../results/fig_2a.pdf', p, width=4.5, height=3.5)
 
-DF %>% filter(type == 'g') %>%
-ggplot(aes(x=r_off, y=mean_r, color=p)) + geom_line() +
+DF %>%
+  ggplot(aes(x=r_off, y=mean_r, color=p)) + geom_line() +
   geom_segment(aes(x=r_off, xend=r_off, y=ll_r, yend=ul_r)) +  # too wide, could offset x-axis slightly
   scale_color_brewer(palette='Set1') + 
   scale_x_continuous("r", breaks=seq(0, 1, 0.25), labels=c('0','0.25','0.50','0.75','1')) +
-  scale_y_continuous(TeX("Estimate of $r$"), expand=c(0,0), limits=c(-0.505, 0.4)) +
-  ggtitle("Jackson r fits for (r,p) graphs") +
-  my_theme(11) -> p
-ggsave('../results/fig_2b.pdf', p, width=4.5, height=2.5)
+  scale_y_continuous(TeX("Estimate of $r$"), expand=c(0,0), limits=c(-0.5, 0.5)) +
+  ggtitle("Jackson r fits for (r,p) graphs") + facet_grid(Type2 ~ Type) +
+  my_theme(11)  -> p
+ggsave('../results/fig_2b.pdf', p, width=4.5, height=3.5)
 
-ggplot(DF, aes(x=r, y=1/(mean_a-1), color=p)) + geom_line() +
+ggplot(DF, aes(x=r, y=p_hat, color=p)) + geom_line() +
   #geom_segment(aes(x=r_off, xend=r_off, y=1/(ll_a-1), yend=1/(ul_a-1))) +
   geom_hline(yintercept=1, color='grey', linetype='dashed') + geom_line() +
   scale_color_brewer(palette='Set1') + 
   scale_x_continuous("r", breaks=seq(0, 1, 0.25), labels=c('0','0.25','0.50','0.75','1')) +
   scale_y_continuous(TeX("Estimate of p"), expand=c(0,0), limits=c(0, 1.05)) +#, breaks=c(0.6, 0.8, 1.0, 1.2)) +
   #ggtitle("Degree distribution fits for (r,p) graphs") +
-  facet_grid(~type) +
+  facet_grid(Type2 ~ Type) +
   my_theme(11) -> p
-ggsave('../results/fig_2.pdf', p, width=4.5, height=2.5)
+ggsave('../results/fig_2.pdf', p, width=4.5, height=3.5)
 
 
 
@@ -168,7 +179,7 @@ ggsave('../results/fig_2.pdf', p, width=4.5, height=2.5)
 
 # # Python code to generate a PA graph with m=1
 # import util, logit, synth_generate, synth_process, csv
-# (G, el) = synth_generate.make_rp_graph('test', n_max=25000, r=1, p=.99, m=1, grow=True)
+# (G, el) = synth_generate.make_rp_graph('test', n_max=25000, r=1, p=0.01, directed=False, m=1, grow=True)
 # fn = '%s/synth_graphs/test_pa.csv' % util.data_path
 # synth_generate.write_edge_list(el, fn)
 # synth_process.process_all_edges('test_pa.csv', n_alt=20, vvv=0)

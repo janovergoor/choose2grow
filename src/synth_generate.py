@@ -156,7 +156,7 @@ def pass_through(graph):
     (type1, r, p, type2, id) = graph.split('-')
     if type1 not in ['g', 'd'] or type2 not in ['d', 'u']:
         print("[ERROR] id format should be [gd]-%.2f-%.2f-[ud]-.02d")
-    (G, el) = make_rp_graph(id, n_max=10000 if type1 == 'g' else 10000,
+    (G, el) = make_rp_graph(id, n_max=20000 if type1 == 'g' else 10000,
                             r=float(r), p=float(p),
                             grow=type1 == 'g',
                             m=4 if type1 == 'g' else 1,
@@ -170,7 +170,7 @@ if __name__ == '__main__':
     todo = []
     for type1 in ['g', 'd']:
         for type2 in ['u', 'd']:
-            for p in [0.00, 0.25, 0.5, 0.75, 0.99]:
+            for p in [0.01, 0.25, 0.5, 0.75, 1.00]:
                 for r in [0.01, 0.25, 0.5, 0.75, 1.00]:
                     for id in range(n):
                         fn = '%s-%.2f-%.2f-%s-%.02d' % (type1, r, p, type2, id)
