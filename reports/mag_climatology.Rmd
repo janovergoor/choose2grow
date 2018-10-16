@@ -45,7 +45,7 @@ author_published <- d_raw %>%
 * total number of papers with at least one out-link: `r nrow(edges %>% filter(!is.na(cites), year_cited > 150) %>% distinct(id))`
 
 ```{r plot_dist_time}
-multiplot(
+Rmisc::multiplot(
   # distribution of when papers are published
   d_raw %>% filter(year > 150) %>%
     group_by(year) %>% summarize(n=n()) %>%
@@ -83,7 +83,7 @@ DF <- inner_join(d_raw,
   filter(!is.na(id))
 ```
 ```{r plot_coverage}
-multiplot(
+mRmisc::ultiplot(
   # density
   ggplot(DF, aes(p_citation_data)) + geom_density() +
     scale_x_continuous("Share of citations") +
@@ -146,7 +146,7 @@ Out-degree over time (global average is `r deg_out %>% filter(year_cited > 150) 
 ```{r plot_out_degree, fig.width=4.8, fig.height=2}
 degs <- deg_out %>% group_by(year_cited) %>% summarize(n_out=mean(n_out))
 
-multiplot(
+Rmisc::multiplot(
     ggplot(degs, aes(year_cited, n_out)) + geom_point() +
       xlab("Year") + ylab("Mean Out-degree") +
       my_theme(),
@@ -163,7 +163,7 @@ multiplot(
 \newpage
 
 ```{r plot citations_time}
-multiplot(
+Rmisc::multiplot(
   edges %>%
     filter(year_published > 1950) %>%
     group_by(cites, year_published) %>% summarize(n=n()) %>%
@@ -196,7 +196,7 @@ dA <- d_raw %>% select(authors) %>%
   separate_rows(authors, sep=',') %>%
   group_by(authors) %>% summarize(n_papers=n())
 
-multiplot(
+Rmisc::multiplot(
   dA %>% group_by(n_papers) %>% summarize(n=n()) %>%
   ggplot(aes(n_papers, n)) + geom_point() +
      ggtitle("pdf of papers/author") +

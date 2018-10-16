@@ -11,95 +11,103 @@ library(scales)
 library(dplyr)
 
 setwd("~/projects/choosing_to_grow/choose2grow/src")
-#source('../reports/helper.R')
-
-
-my_theme <- function(base_size=9) {
-  # Set the base size
-  theme_bw(base_size=base_size) +
-    theme(
-      # Center title
-      plot.title = element_text(hjust = 0.5),
-      # Make the background white
-      panel.background=element_rect(fill='white', colour='white'),
-      panel.grid.major=element_blank(),
-      panel.grid.minor=element_blank(),
-      # Minimize margins
-      plot.margin=unit(c(0.2, 0.2, 0.2, 0.2), "cm"),
-      panel.margin=unit(0.25, "lines"),
-      # Tiny space between axis labels and tick labels
-      axis.title.x=element_text(margin=ggplot2::margin(t=6.0)),
-      axis.title.y=element_text(margin=ggplot2::margin(r=6.0)),
-      # Simplify the legend
-      legend.key=element_blank(),
-      #legend.title=element_blank(),
-      legend.title.align=0.5,
-      legend.background=element_rect(fill='transparent')
-    )
-}
-
+source('../reports/helper.R')
 
 ##
-## Figure 1 - estimates of p by PA and PA-FoF models
+## Figure 1 - Likelihood surface
 ##
-DF <- read_csv("../results/r_vs_p_synth.csv", col_types='ccdd') %>%
-      separate(fn, into=c("type","r","p","type2","id"), sep='-') %>%
-      filter(p != '0.00', p != '0.99') %>%
-      group_by(type, r, p, type2, model) %>%
-      summarize(LL=-1*mean(ll), mean=mean(estimate),
-                ll=min(estimate), ul=max(estimate),
-                n=n()) %>%
-      ungroup() %>%
-      mutate(
-        Model=model,
-        Type=ifelse(type=='g', 'External / Growth', 'Internal / Densify'),
-        Type2=ifelse(type2=='d', 'Directed', 'Undirected'),
-        r=as.numeric(r),
-        P=paste0('p=', p)
-      )
+DF <- read_csv("../results/fig1_data.csv", col_types='ddd') %>%
+  # weird but monotomic transformation of ll to get the colors right
+  mutate(ll=exp((ll+55000)/1000)) %>%
+  select(x=alpha, y=p, z=ll)
 
-DF %>%
-  filter(type=='g', type2=='u') %>%
-  mutate(Model=ifelse(Model=='p-mixed', 'PA', 'PA-FoF')) %>%
-  ggplot(aes(r, mean, color=p)) +
-    geom_line() + #geom_point() +
-    geom_segment(aes(x=r, xend=r, y=ll, yend=ul)) +
-    facet_grid( ~ Model) +
-    scale_color_brewer(palette='Set1') + 
-    scale_x_continuous("r", breaks=seq(0, 1, 0.25), labels=c('0','0.25','0.50','0.75','1')) +
-    scale_y_continuous(TeX("Estimate of $p$"), expand=c(0,0), limits=c(0, 1.02), breaks=seq(0, 1, 0.25)) +
-    my_theme(11) -> p
-ggsave('../results/fig_1.pdf', p, width=6, height=3)
+ggplot(DF, aes(x, y)) +
+  geom_raster(aes(fill=z), interpolate=T) +
+  geom_contour(aes(z=z), colour="black", bins=15, alpha=0.25) +
+  #stat_contour(geom="polygon", aes(z=z, fill=..level.. ), bins=15) +
+  #scale_fill_gradient2(low="#d73027", mid='#fee090', high="#4575b4", midpoint=2000) + # red:blue
+  scale_fill_gradientn(colours = heat.colors(6)) +
+  scale_x_continuous(TeX("$\\alpha$"), limits=c(0, 2), expand=c(0,0)) +
+  scale_y_continuous(TeX("$\\pi_1$"), limits=c(0, 1), expand=c(0,0)) +
+  geom_point(data=data.frame(x=1, y=0.5), color='black') +
+  my_theme() + theme(legend.position='none') -> p
 
-DF %>%
-  mutate(Model=ifelse(Model=='p-mixed', 'PA', 'PA-FoF')) %>%
-  ggplot(aes(r, mean, color=p)) +
-    geom_line(aes(linetype=Type2)) + #geom_point() +
-    geom_segment(aes(x=r, xend=r, y=ll, yend=ul)) +
-    facet_grid(Type ~ Model) +
-    scale_color_brewer(palette='Set1') + 
-    scale_x_continuous("r", breaks=seq(0, 1, 0.25), labels=c('0','0.25','0.50','0.75','1')) +
-    scale_y_continuous(TeX("Estimate of $p$"), expand=c(0,0), limits=c(0, 1.02), breaks=seq(0, 1, 0.25)) +
-    my_theme(11) -> p
-ggsave('../results/fig_1a.pdf', p, width=6, height=4)
-
-## Figure 1b - LL by PA and PA-FoF models
-## currently not in the paper
-DF %>%
-  filter(type2=='u') %>%
-  ggplot(aes(r, LL, color=Model)) +
-    geom_line() +
-    facet_grid(Type ~ P, scales='free_y') +
-    scale_color_brewer(palette='Set1') + 
-    scale_x_continuous("r", breaks=seq(0, 1, 0.25), labels=c('0','0.25','0.50','0.75','1')) +
-    scale_y_continuous("Log-likelihood") +
-    my_theme(11) -> p
-ggsave('../results/fig_1b.pdf', p, width=9, height=3.5)
+ggsave('../results/fig_1.pdf', p, width=4.5, height=3)
 
 
 
 ##
-## Figure 2 - Power law fits on degree of (r,p) graphs
+## Figure 2 - Attachment function comparing Newman,Pham,degree-model
+##
+
+DF <- read_csv("../data/choices_grouped/test_pa.csv", col_types='iiii')
+DF <- DF %>%
+  filter(c==1) %>%
+  inner_join(DF %>% group_by(choice_id) %>% summarize(tot=sum(n)), by='choice_id') %>%
+  mutate(p=n/tot) %>%
+  group_by(deg) %>%
+  summarize(stat=sum(1/p)) %>%
+  left_join(d %>% group_by(deg) %>% summarize(w=1/n()), by='deg')
+
+# read log-degree logit fit
+fit1 <- read_csv("../results/fig2_deg_fit.csv", col_types='cdd') %>% filter(deg == 'alpha')
+# read non-parametric degree log fit
+DFnp <- read_csv("../results/fig2_deg_fit.csv", col_types='cdd') %>% filter(deg != 'alpha') %>%
+  filter(coef<20) %>%
+  mutate(deg=as.numeric(deg), stat=exp(coef), w=1/se)
+DFnp$stat = DFnp$stat / DFnp[DFnp$deg==1, ]$stat
+fit2 <- lm(stat ~ deg, weights=w, data=DFnp)
+
+DF <- rbind(
+  # compute Newman
+  DF %>% select(deg, stat) %>% mutate(id='newman', label='Newman [36]', ll=0, ul=0),
+  # compute Newman corrected
+  DF %>% mutate(stat=stat*w) %>% select(deg,stat) %>% mutate(id='newman2', label='Newman\nCorrected [39]', ll=0, ul=0),
+  # read non-parametric degree logit fits
+  DFnp %>% select(deg, stat) %>% mutate(id='npl', label='Non-parametric\nLogit', ll=0, ul=0),
+  predict(fit2, data.frame(deg=1:100), interval="confidence") %>% as.data.frame() %>% mutate(deg=1:100, id='ls', label='Least-squares [39]') %>%
+    select(deg, stat=fit, id, label, ll=lwr, ul=upr),
+  # compute log-degree logit fit
+  data.frame(deg=1:100) %>% mutate(stat=deg^fit1$coef, id='ldl', label='Log-degree Logit', ll=deg^(fit1$coef - 1.96*fit1$se), ul=deg^(fit1$coef + 1.96*fit1$se))
+  )
+
+DF <- DF %>% filter(id %in% c('ldl', 'ls', 'npl')) %>% mutate(ref=1) %>%
+  rbind(
+    DF %>% filter(id %in% c('newman', 'newman2')) %>%
+      inner_join(DF %>% filter(deg==1) %>% select(id, ref=stat), by=c('id'))
+  ) %>%
+  filter(deg > 0, deg < 101) %>%
+  filter(id != 'newman2') %>%
+  mutate(
+    stat=stat/ref,
+    label=factor(label, levels=c('Newman [36]','Non-parametric\nLogit','Least-squares [39]','Log-degree Logit'))
+  )
+
+ggplot(DF, aes(deg, stat, color=label)) +
+  geom_point(shape=20, alpha=0.0) +
+  geom_abline(slope=1, intercept=0, color='grey') +
+  # least squares fit
+  #geom_ribbon(data=DF %>% filter(id=='ls') %>% mutate(ll=ifelse(ll<1, 1, ll)), aes(x=deg, ymin=ll, ymax=ul, fill=label), alpha=0.2, color=NA, show.legend=F) +
+  geom_line(data=DF %>% filter(id=='ls'), show.legend=F, size=0.5) +
+  # log-degree fit
+  #geom_ribbon(data=DF %>% filter(id=='ldl'), aes(x=deg, ymin=ll, ymax=ul, fill=label), alpha=0.6, color=NA, show.legend=F) +
+  geom_line(data=DF %>% filter(id=='ldl'), show.legend=F, size=0.5) +
+  # extra points
+  geom_point(data=DF %>% filter(id=='newman'), shape=20, alpha=0.7) +
+  geom_point(data=DF %>% filter(id=='npl'), shape=20, alpha=0.7) +
+  scale_x_log10("log Degree", labels=trans_format('log10', math_format(10^.x)), breaks=c(10^0, 10^1, 10^2), expand=c(0,0)) +
+  scale_y_log10("Relative likelihood", labels=trans_format('log10', math_format(10^.x)), expand=c(0,0)) +
+  coord_cartesian(xlim=c(1, 100), ylim=c(1, 120)) +
+  scale_color_brewer(palette='Set1') + 
+  my_theme() + theme(legend.title=element_blank(), legend.position=c(0.18, 0.77)) -> p
+
+ggsave('../results/fig_2.pdf', p, width=4, height=3)
+
+
+
+
+##
+## Figure 3 - Power law fits on degree of (r,p) graphs
 ##
 source("http://tuvalu.santafe.edu/~aaronc/powerlaws/plfit.r")
 
@@ -127,7 +135,7 @@ DF <- list.files("../data/synth_graphs", pattern='[gd].*') %>%
   group_by(type, r, p, type2) %>%
   summarize(mean_a=mean(alpha), ll_a=quantile(alpha, 0.25), ul_a=quantile(alpha, 0.75), # ll_a=min(alpha), ul_a=max(alpha),
             mean_r=mean(r_est), ll_r=quantile(r_est, 0.25), ul_r=quantile(r_est, 0.75)
-            ) %>% ungroup() %>%
+  ) %>% ungroup() %>%
   mutate(
     r=as.numeric(r),
     # offset r slightly
@@ -137,7 +145,6 @@ DF <- list.files("../data/synth_graphs", pattern='[gd].*') %>%
     # compute p_hat
     p_hat=ifelse(type2=='d', (mean_a-2)/(mean_a-1), (mean_a-3)/(mean_a-1))
   )
-  
 
 DF %>%
   ggplot(aes(x=r_off, y=mean_a, color=p)) + geom_line() +
@@ -148,7 +155,7 @@ DF %>%
   ggtitle("Power law fits for (r,p) graphs") + facet_grid(Type2 ~ Type) +
   geom_hline(data=data.frame(y=c(2,3), Type2=c('Directed','Undirected')), aes(yintercept=y), color='lightgrey', linetype='dashed') +
   my_theme(11) -> p
-ggsave('../results/fig_2a.pdf', p, width=4.5, height=3.5)
+ggsave('../results/fig_3a.pdf', p, width=4.5, height=3.5)
 
 DF %>%
   ggplot(aes(x=r_off, y=mean_r, color=p)) + geom_line() +
@@ -158,7 +165,7 @@ DF %>%
   scale_y_continuous(TeX("Estimate of $r$"), expand=c(0,0), limits=c(-0.5, 0.5)) +
   ggtitle("Jackson r fits for (r,p) graphs") + facet_grid(Type2 ~ Type) +
   my_theme(11)  -> p
-ggsave('../results/fig_2b.pdf', p, width=4.5, height=3.5)
+ggsave('../results/fig_3b.pdf', p, width=4.5, height=3.5)
 
 ggplot(DF, aes(x=r, y=p_hat, color=p)) + geom_line() +
   #geom_segment(aes(x=r_off, xend=r_off, y=1/(ll_a-1), yend=1/(ul_a-1))) +
@@ -169,52 +176,67 @@ ggplot(DF, aes(x=r, y=p_hat, color=p)) + geom_line() +
   #ggtitle("Degree distribution fits for (r,p) graphs") +
   facet_grid(Type2 ~ Type) +
   my_theme(11) -> p
-ggsave('../results/fig_2.pdf', p, width=4.5, height=3.5)
+ggsave('../results/fig_3.pdf', p, width=4.5, height=3.5)
+
 
 
 
 ##
-## Figure 3 - Attachment function comparing Newman,Pham,degree-model
+## Figure 4 - estimates of p by PA and PA-FoF models
 ##
-
-# # Python code to generate a PA graph with m=1
-# import util, logit, synth_generate, synth_process, csv
-# (G, el) = synth_generate.make_rp_graph('test', n_max=25000, r=1, p=0.01, directed=False, m=1, grow=True)
-# fn = '%s/synth_graphs/test_pa.csv' % util.data_path
-# synth_generate.write_edge_list(el, fn)
-# synth_process.process_all_edges('test_pa.csv', n_alt=20, vvv=0)
-# m = logit.DegreeModel('test_pa.csv', vvv=1, max_deg=100)
-# m.fit()
-# with open("../results/deg_fit.csv", 'w') as f:
-#     writer = csv.writer(f)
-#     writer.writerow(['deg','coef','se'])
-#     for i in range(len(m.u)):
-#         x = writer.writerow([i, m.u[i], m.se[i]])
-d <- read_csv("../data/choices_grouped/test_pa.csv", col_types='iiii')
-DF <- d %>%
-  filter(c==1) %>%
-  inner_join(d %>% group_by(choice_id) %>% summarize(tot=sum(n)), by='choice_id') %>%
-  mutate(p=n/tot) %>%
-  group_by(deg) %>%
-  summarize(stat=sum(1/p)) %>%
-  left_join(d %>% group_by(deg) %>% summarize(w=1/n()), by='deg')
-
-DF <- rbind(
-    DF %>% select(deg, stat) %>% mutate(type='Newman [36]'),
-    DF %>% mutate(stat=stat*w) %>% select(deg,stat) %>% mutate(type='Newman\nCorrected [39]'),
-    read_csv("../results/deg_fit.csv", col_types='idd') %>%
-      select(deg, stat=coef) %>% mutate(stat=exp(stat), type='Conditional\nLogit'))
+DF <- read_csv("../results/fig4_data.csv", col_types='ccdd') %>%
+  separate(fn, into=c("type","r","p","type2","id"), sep='-') %>%
+  filter(p != '0.00', p != '0.99') %>%
+  group_by(type, r, p, type2, model) %>%
+  summarize(LL=-1*mean(ll), mean=mean(estimate),
+            ll=min(estimate), ul=max(estimate),
+            n=n()) %>%
+  ungroup() %>%
+  mutate(
+    Model=model,
+    Type=ifelse(type=='g', 'External / Growth', 'Internal / Densify'),
+    Type2=ifelse(type2=='d', 'Directed', 'Undirected'),
+    r=as.numeric(r),
+    P=paste0('p=', p)
+  )
 
 DF %>%
-  inner_join(DF %>% filter(deg==1) %>% select(type, ref=stat), by=c('type')) %>%
-  filter(deg > 0, deg < 101) %>%
-  mutate(
-    stat=stat/ref,
-    type=factor(type, levels=c('Conditional\nLogit','Newman [36]','Newman\nCorrected [39]'))
-  ) %>%
-  ggplot(aes(deg, stat, color=type)) + geom_point(shape=20, alpha=0.7) +
-    scale_x_log10("log Degree", limits=c(1, 100), labels=trans_format('log10', math_format(10^.x)), breaks=c(10^0, 10^1, 10^2)) +
-    scale_y_log10("Relative likelihood", limits=c(1, 110), labels=trans_format('log10', math_format(10^.x))) +
-    scale_color_brewer(palette='Set1') + 
-    my_theme() + theme(legend.title=element_blank(), legend.position=c(0.14, 0.78)) -> p
-ggsave('../results/fig_3.pdf', p, width=4, height=2.5)
+  filter(type=='g', type2=='u') %>%
+  mutate(Model=ifelse(Model=='p-mixed', 'PA', 'PA-FoF')) %>%
+  ggplot(aes(r, mean, color=p)) +
+  geom_line() + #geom_point() +
+  geom_segment(aes(x=r, xend=r, y=ll, yend=ul)) +
+  facet_grid( ~ Model) +
+  scale_color_brewer(palette='Set1') + 
+  scale_x_continuous("r", breaks=seq(0, 1, 0.25), labels=c('0','0.25','0.50','0.75','1')) +
+  scale_y_continuous(TeX("Estimate of $p$"), expand=c(0,0), limits=c(0, 1.02), breaks=seq(0, 1, 0.25)) +
+  my_theme(11) -> p
+ggsave('../results/fig_4.pdf', p, width=6, height=3)
+
+DF %>%
+  mutate(Model=ifelse(Model=='p-mixed', 'PA', 'PA-FoF')) %>%
+  ggplot(aes(r, mean, color=p)) +
+  geom_line(aes(linetype=Type2)) + #geom_point() +
+  geom_segment(aes(x=r, xend=r, y=ll, yend=ul)) +
+  facet_grid(Type ~ Model) +
+  scale_color_brewer(palette='Set1') + 
+  scale_x_continuous("r", breaks=seq(0, 1, 0.25), labels=c('0','0.25','0.50','0.75','1')) +
+  scale_y_continuous(TeX("Estimate of $p$"), expand=c(0,0), limits=c(0, 1.02), breaks=seq(0, 1, 0.25)) +
+  my_theme(11) -> p
+ggsave('../results/fig_4a.pdf', p, width=6, height=4)
+
+## Figure 1b - LL by PA and PA-FoF models
+## currently not in the paper
+DF %>%
+  filter(type2=='u') %>%
+  ggplot(aes(r, LL, color=Model)) +
+  geom_line() +
+  facet_grid(Type ~ P, scales='free_y') +
+  scale_color_brewer(palette='Set1') + 
+  scale_x_continuous("r", breaks=seq(0, 1, 0.25), labels=c('0','0.25','0.50','0.75','1')) +
+  scale_y_continuous("Log-likelihood") +
+  my_theme(11) -> p
+ggsave('../results/fig_4b.pdf', p, width=9, height=3.5)
+
+
+

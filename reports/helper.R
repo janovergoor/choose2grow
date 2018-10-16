@@ -1,8 +1,7 @@
 suppressPackageStartupMessages(library(ggplot2))
 library(mlogit)
 library(scales)
-library(pROC)
-library(Rmisc)
+#library(Rmisc)
 library(stringr)
 library(tidyr)
 library(dplyr)
@@ -100,6 +99,7 @@ acc <- function(f, data) {
 }
 
 # compute the AUC of a model on new data
+# require(pROC)
 auc <- function(f, data) {
   # compute predictions
   P <- predict(f, newdata=data) %>% as.data.frame()
@@ -119,5 +119,5 @@ auc <- function(f, data) {
   x$correct2 <- sample(1:25, nrow(x), replace=T)
   x$choice2 <- ifelse(x$choice==1, x$correct2, x$choice) # 1/25 chance of wrongly getting the 'right' answer
   #x$choice2 <- ifelse(x$choice!=1 & x$correct2==x$choice2, , x$choice2)
-  as.numeric(multiclass.roc(as.numeric(x$correct2), as.numeric(x$choice2), quiet=T)$auc)
+  as.numeric(pROC::multiclass.roc(as.numeric(x$correct2), as.numeric(x$choice2), quiet=T)$auc)
 }

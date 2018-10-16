@@ -12,7 +12,7 @@ To reproduce the results from Section 5.1, follow these steps (from the `/src` f
 
 1. Generate synthetic graphs with `python synth_generate.py`. This generates 10 graphs for each (r, p) combination, and writes them to `data_path/graphs`, as defined in `util.py`.
 2. Extract, for each edge, the relevant choice data with `python synth_process.py`. The choice set data is written to `data_path/choices`.
-3. Run the estimation code with `python synth_fit.py > ../results/r_vs_p_synth.csv`.
+3. Run the estimation code with `python synth_fit.py > ../results/fig4_data.csv`.
 4. Run the R code to make the plots with `Rscript make_plots.R`.
 
 For the results from Section 5.2, follow these steps:

@@ -10,7 +10,7 @@ from multiprocessing import Pool
   input : data_path/choices/
   output: ./results/
 
-  python synth_fit.py > ../results/r_vs_p_synth.csv
+  python synth_fit.py > ../results/fig4_data.csv
 
 """
 
