@@ -357,7 +357,6 @@ class MixedLogitModel(LogitModel):
         """
         Construct a filename, including contituent model shorts.
         """
-
         fn = self.id.replace('.csv', '')
         fn = '%s-%s.csv' % (fn, self.model_short)
         return fn
@@ -388,12 +387,7 @@ class UniformModel(LogitModel):
         individual likelihood based on the total number of samples, as the
         individual likelihood for every unpicked choices is the same.
         """
-        # if we read the C series before, use that
-        if getattr(self, 'C', None) is not None:
-            counts = self.C.n_elig
-        # otherwise, use the number of samples
-        else:
-            counts = self.D.groupby('choice_id')['y'].aggregate(len)
+        counts = self.D.groupby('choice_id')['y'].aggregate(len)
         return np.array(1.0 / counts)
 
     def grad(self, u=None, w=None):
@@ -441,8 +435,6 @@ class DegreeModel(LogitModel):
           (sum_{y in C} 1{k_y = d}*exp(theta_k_y)) /
           (sum_{y in C}            exp(theta_k_y))
         ]
-
-        TODO - implement C-weighting negative samples
         """
         # if no parameters specified, use the parameters of the object itself
         if u is None:
@@ -638,18 +630,10 @@ class UniformFofModel(LogitModel):
         individual likelihood based on the total number of samples, as the
         individual likelihood for every unpicked choices is the same.
         """
-        # if we read the C series before, use that
-        if getattr(self, 'C', None) is not None:
-            # pre-group
-            DFg = self.D.groupby('choice_id', as_index=False).agg(
-                {'choose': {'y': max}, 'n_elig': {'m': max}, 'n_elig_fof': {'m': max}})
-            return np.where(DFg.n_elig_fof.m, DFg.choose.y / DFg.n_elig_fof.m, 1.0 / DFg.n_elig.m)
-        # otherwise, use the number of samples
-        else:
-            # pre-group
-            DFg = self.D.groupby('choice_id', as_index=False).agg(
-                {'has': {'n': len, 'n_fof': np.sum}, 'choose': {'y': max}})
-            return np.where(DFg.has.n_fof, DFg.choose.y / DFg.has.n_fof, 1.0 / DFg.has.n)
+        # pre-group
+        DFg = self.D.groupby('choice_id', as_index=False).agg(
+            {'has': {'n': len, 'n_fof': np.sum}, 'choose': {'y': max}})
+        return np.where(DFg.has.n_fof, DFg.choose.y / DFg.has.n_fof, 1.0 / DFg.has.n)
 
     def grad(self, u=None, w=None):
         """
@@ -677,14 +661,8 @@ class LogDegreeFoFModel(LogitModel):
         self.D['has'] = self.D.fof > 0  # has any FoF choices
         self.D['choose'] = 1 * (self.D['has'] & self.D.y == 1)  # chose an FoF node
         self.D['log_degree'] = np.log(self.D.deg + util.log_smooth)  # pre-log degree
-        # if we read the C series before, use that
-        if getattr(self, 'C', None) is not None:
-            DFg = self.D.groupby('choice_id', as_index=False).agg({'n_elig_fof': {'m': max}})
-            self.elig = DFg.n_elig_fof.m  # number of eligible FoFs
-        # otherwise, use the number of samples
-        else:
-            DFg = self.D.groupby('choice_id', as_index=False).agg({'has': {'n_fof': np.sum}})
-            self.elig = DFg.has.n_fof   # number of eligible FoFs
+        DFg = self.D.groupby('choice_id', as_index=False).agg({'has': {'n_fof': np.sum}})
+        self.elig = DFg.has.n_fof   # number of eligible FoFs
 
     def individual_likelihood(self, u):
         """
@@ -808,8 +786,6 @@ class LogFofModel(LogitModel):
             w = np.array([1] * self.n)
         # transform fof to score
         self.D['score'] = np.exp(u * self.D['log_fof'])
-        if getattr(self, 'C', None) is not None:
-            self.D.loc[self.D.y != 1, 'score'] *= self.D.loc[self.D.y != 1, 'C']
         # take log_fof for chosen examples
         choices = self.D.loc[self.D.y == 1, 'fof']
         # compute 'numerator score'

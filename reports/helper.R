@@ -1,7 +1,6 @@
 suppressPackageStartupMessages(library(ggplot2))
 library(mlogit)
 library(scales)
-#library(Rmisc)
 library(stringr)
 library(tidyr)
 library(dplyr)
@@ -20,13 +19,12 @@ my_theme <- function(base_size=10) {
       panel.grid.minor=element_blank(),
       # Minimize margins
       plot.margin=unit(c(0.2, 0.2, 0.2, 0.2), "cm"),
-      panel.margin=unit(0.25, "lines"),
+      panel.spacing=unit(0.25, "lines"),
       # Tiny space between axis labels and tick labels
       axis.title.x=element_text(margin=ggplot2::margin(t=6.0)),
       axis.title.y=element_text(margin=ggplot2::margin(r=6.0)),
       # Simplify the legend
       legend.key=element_blank(),
-      legend.title=element_blank(),
       legend.background=element_rect(fill='transparent')
     )
 }

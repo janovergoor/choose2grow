@@ -53,6 +53,8 @@ def process_all_edges(graph, n_alt=10, vvv=0):
     el = read_edge_list('%s/synth_graphs/%s' % (data_path, graph), vvv)
     # is directed?
     directed = '-d-' in graph
+    # is growth or density?
+    growth = 'g-' in graph
     # create initial graph
     G = nx.DiGraph() if directed else nx.Graph()
     for (t, i, j) in el:
@@ -63,10 +65,17 @@ def process_all_edges(graph, n_alt=10, vvv=0):
               (graph, len(G.nodes()), len(G.edges())))
     # look at every edge individually
     T = []
+    last_i = 0
     for (t, i, j) in el:
         if t == 0:
             continue
         G.add_nodes_from([i, j])  # add nodes
+        # for growth, skip the first edge for every node as
+        # there are friends yet
+        if i != last_i and growth:
+            G.add_edge(i, j)
+            last_i = i
+            continue
         # create degree distribution dictionary
         degs = dict(G.in_degree() if directed else G.degree())
         degs_counter = Counter(degs.values())
@@ -119,6 +128,8 @@ def process_all_edges(graph, n_alt=10, vvv=0):
         })
         # actually add the edge
         G.add_edge(i, j)
+        # keep track of last i node
+        last_i = i
         if vvv > 1:
             if len(G.edges()) % 1000 == 0:
                 print("[%s] done %d/%d edges" %
