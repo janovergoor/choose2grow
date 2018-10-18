@@ -22,6 +22,8 @@ R -e "rmarkdown::render('mag_climatology.Rmd', output_file='mag_climatology.pdf'
 library(knitr)
 knitr::opts_chunk$set(echo=F, warning=F, cache=T, message=F, fig.width=6, fig.height=2.5)
 source("helper.R")
+summarize <- dplyr::summarize
+mutate <- dplyr::mutate
 ```
 
 ```{r data}
@@ -83,7 +85,7 @@ DF <- inner_join(d_raw,
   filter(!is.na(id))
 ```
 ```{r plot_coverage}
-mRmisc::ultiplot(
+Rmisc::multiplot(
   # density
   ggplot(DF, aes(p_citation_data)) + geom_density() +
     scale_x_continuous("Share of citations") +
@@ -225,7 +227,7 @@ d_raw %>% select(keywords) %>%
 ## Model
 Data construction process:
 
-* sample 5000 citations from after 2011
+* sample 10000 citations from after 2011
 * for each actual citation, sample 24 non-cited papers (from before publication date)
 * for each of the (paper,option) pairs, compute features (n citations, years since, has same author)
 
@@ -235,7 +237,7 @@ str_overlap <- Vectorize(function(s1, s2) {
   intersect(str_split(s1, ',')[[1]], str_split(s2, ',')[[1]]) %>% length()
 })
 
-make_data <- function(n, seed=100){
+make_data <- function(n, seed=NULL){
     set.seed(seed)
     ## sample actual choices
     dm1 <- edges %>%
@@ -303,55 +305,70 @@ make_data <- function(n, seed=100){
           summarize(n_papers=sum(ifelse(year.y < year.x & year.y > 1950, n_papers, 0))) %>%
           group_by(paper_id, option_id) %>% summarize(max_n_papers=max(n_papers)),
         by=c('paper_id','option_id')
-      )
+      ) %>%
+      mutate(is_old=ifelse(delta_years > 10, 1, 0))
     
     H <- DM %>% 
       group_by(paper_id) %>% mutate(alt_id=row_number()) %>% ungroup() %>%
-      select(choice_id=paper_id, alt_id, y, n_citations:max_n_papers) %>% as.data.frame()
+      select(choice_id=paper_id, alt_id, y, n_citations:is_old) %>% as.data.frame()
 
   return(H)
 }
 ```
 
-```{r actually_make_data1}
+```{r actually_make_data, eval=F}
 # split generation up in parts to not use too much memory at once
-a <- make_data(n=2500, seed=133)
-b <- make_data(n=2500, seed=549)
-a <- rbind(a, b[!(b$choice_id %in% a$choice_id), ])  # join together
-b <- make_data(n=1000, seed=791)  # get few extra to make sure to hit 5000
-c <- rbind(a, b[!(b$choice_id %in% a$choice_id), ])  # join together
-```
-```{r actually_make_data2}
-samples = distinct(c, choice_id) %>% sample_n(5000) %>% .$choice_id
-H_train <- c %>%
+X <- make_data(n=100)
+while(nrow(distinct(X, choice_id)) < 10000) {
+  message(nrow(distinct(X, choice_id)))
+  Y <- make_data(n=1000)
+  X <- rbind(X, Y[!(Y$choice_id %in% X$choice_id), ])  # join together
+}
+message(nrow(distinct(X, choice_id)))
+samples = distinct(X, choice_id) %>% sample_n(10000) %>% .$choice_id
+
+# convert to mlogit.data
+H_train <- X %>%
   filter(choice_id %in% samples) %>%
   mlogit.data(chid.var='choice_id', choice="y", alt.var='alt_id')
 H_test  <- make_data(n=1000, seed=953) %>%
   mlogit.data(chid.var='choice_id', choice="y", alt.var='alt_id')
+
+# store the data
+write_csv(H_train, "../results/mag_cli_H_train.csv")
+write_csv(H_test, "../results/mag_cli_H_test.csv")
+```
+
+```{r data_reload}
+H_train <- read.csv("../results/mag_cli_H_train.csv") %>%
+  mlogit.data(chid.var='choice_id', choice="y", alt.var='alt_id')
+H_test  <- read.csv("../results/mag_cli_H_test.csv") %>%
+  mlogit.data(chid.var='choice_id', choice="y", alt.var='alt_id')
 ```
 
 ```{r model_models}
-f1 <- mlogit(y ~ log(n_citations+1) | 0, H_train)
-f2 <- mlogit(y ~ log(n_citations+1) + has_same_author | 0, H_train)
-f3 <- mlogit(y ~ log(n_citations+1) + has_same_author + log(delta_years) | 0, H_train)
-f4 <- mlogit(y ~ log(n_citations+1) + has_same_author + log(delta_years)  + log(max_n_papers+1) | 0, H_train)
-f5 <- mlogit(y ~ log(n_citations+1) + has_same_author + log(delta_years)  + log(max_n_papers+1) + n_same_keywords| 0, H_train)
+fs <- list(
+  mlogit(y ~ log(n_citations+1) | 0, H_train),
+  mlogit(y ~ log(n_citations+1) + has_same_author | 0, H_train),
+  mlogit(y ~ log(n_citations+1) + has_same_author + log(delta_years) | 0, H_train),
+  mlogit(y ~ log(n_citations+1) + has_same_author + log(delta_years)  + log(max_n_papers+1) | 0, H_train),
+  mlogit(y ~ log(n_citations+1) + has_same_author + log(delta_years)  + log(max_n_papers+1) + n_same_keywords|  0, H_train),
+  mlogit(y ~ log(n_citations+1) + has_same_author + is_old*log(n_citations+1) | 0, H_train)
+)
 ```
 
 ```{r sg_text}
 stargazer::stargazer(
-  f1, f2, f3, f4, f5,
+  fs,
   dep.var.caption = "",
-  covariate.labels = c("log Citations", "Has same author", "log Age", "Max papers by author", "# same keywords"),
+  covariate.labels = c("log Citations", "Has same author", "log Age", "Max papers by author", "# same keywords", "+10 years", "+10 years*log Citations"),
   header=FALSE, 
   type='text')
 ```
 
-```{r}
-print("Train accuracy:")
-c(acc(f1, H_train), acc(f2, H_train), acc(f3, H_train), acc(f4, H_train), acc(f5, H_train)) %>%
-  round(4) %>% paste(collapse=' & ') %>% print()
-print("Test accuracy:")
-c(acc(f1, H_test), acc(f2, H_test), acc(f3, H_test), acc(f4, H_test), acc(f5, H_test)) %>%
-  round(4) %>% paste(collapse=' & ') %>% print()
+```{r acc}
+print(paste("Train accuracy  &  ",
+    lapply(fs, function(x) acc(x, H_train)) %>% unlist() %>% round(3) %>% paste(collapse=' & '), ' \\'))
+print(paste("Test accuracy   &  ",
+    lapply(fs, function(x) acc(x, H_test)) %>% unlist() %>% round(3) %>% paste(collapse=' & '), ' \\'))
 ```
