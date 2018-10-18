@@ -61,7 +61,7 @@ DFnp <- read_csv("../results/fig2_data.csv", col_types='cdd') %>% filter(deg != 
   filter(coef<20) %>%
   mutate(deg=as.numeric(deg), stat=exp(coef), w=1/se)
 DFnp$stat = DFnp$stat / DFnp[DFnp$deg==1, ]$stat
-fit2 <- lm(stat ~ 0 + deg, weights=w, data=DFnp)
+fit2 <- lm(stat ~ 0 + deg, weights=w, data=DFnp %>% filter(coef!=1))
 
 DF <- rbind(
   # compute Newman
@@ -90,14 +90,14 @@ DF <- DF %>% filter(id %in% c('ldl', 'ls', 'npl')) %>% mutate(ref=1) %>%
 
 ggplot(DF, aes(deg, stat, color=label)) +
   geom_point(shape=20, alpha=0.0) +
-  #geom_abline(slope=1, intercept=0, color='grey') +
+  geom_abline(slope=1, intercept=0, color='grey') +
   geom_line(data=DF %>% filter(id=='ls'), show.legend=F, size=0.5) +
   geom_line(data=DF %>% filter(id=='ldl'), show.legend=F, size=0.5) +
   geom_point(data=DF %>% filter(id=='newman'), shape=20, alpha=0.7) +
   geom_point(data=DF %>% filter(id=='npl'), shape=20, alpha=0.7) +
   scale_x_log10("log Degree", labels=trans_format('log10', math_format(10^.x)), breaks=c(10^0, 10^1, 10^2), expand=c(0,0)) +
   scale_y_log10("Relative likelihood", labels=trans_format('log10', math_format(10^.x)), expand=c(0,0)) +
-  coord_cartesian(xlim=c(1, 100), ylim=c(1, 120)) +
+  coord_cartesian(xlim=c(1, 100), ylim=c(1, 100)) +
   scale_color_brewer(palette='Set1') + 
   my_theme() + theme(legend.position=c(0.20, 0.79), legend.title=element_blank()) -> p
 

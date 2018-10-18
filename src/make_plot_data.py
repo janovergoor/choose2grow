@@ -35,7 +35,7 @@ T.to_csv("../results/fig1_data_em.csv", index=False)
 #
 # Figure 2 - "PA vs Pham"
 #
-(G, el) = synth_generate.make_rp_graph('test', n_max=5000, r=1, p=0.01, directed=False, m=1, grow=True)
+(G, el) = synth_generate.make_rp_graph('test', n_max=2000, r=1, p=0.01, directed=False, m=1, grow=True)
 fn = '%s/synth_graphs/test_pa.csv' % util.data_path
 synth_generate.write_edge_list(el, fn)
 synth_process.process_all_edges('test_pa.csv', n_alt=20, vvv=0)
