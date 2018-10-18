@@ -28,14 +28,14 @@ m = logit.MixedLogitModel('fig1_em', D=D, vvv=2)
 m.add_uniform_model()
 m.add_log_degree_model()
 m.models[1].u[0] = 0.25
-T = m.fit(n_rounds=100, etol=0.01, return_stats=True)
+T = m.fit(n_rounds=100, etol=0.001, return_stats=True)
 T.to_csv("../results/fig1_data_em.csv", index=False)
 
 
 #
 # Figure 2 - "PA vs Pham"
 #
-(G, el) = synth_generate.make_rp_graph('test', n_max=10000, r=1, p=0.01, directed=False, m=1, grow=True)
+(G, el) = synth_generate.make_rp_graph('test', n_max=5000, r=1, p=0.01, directed=False, m=1, grow=True)
 fn = '%s/synth_graphs/test_pa.csv' % util.data_path
 synth_generate.write_edge_list(el, fn)
 synth_process.process_all_edges('test_pa.csv', n_alt=20, vvv=0)

@@ -20,7 +20,8 @@ DF <- read_csv("../results/fig1_data.csv", col_types='ddd') %>%
   # weird but monotomic transformation of ll to get the colors right
   mutate(ll=exp((ll+55000)/1000)) %>%
   select(x=alpha, y=p, z=ll)
-em = read_csv("../results/fig1_data_em.csv", col_types='iddddd')
+em = read_csv("../results/fig1_data_em.csv", col_types='iddddd') %>%
+  mutate(x=u2, y=p1)
 
 ggplot(DF, aes(x, y)) +
   geom_raster(aes(fill=z), interpolate=T) +
@@ -28,10 +29,12 @@ ggplot(DF, aes(x, y)) +
   #stat_contour(geom="polygon", aes(z=z, fill=..level.. ), bins=15) +
   #scale_fill_gradient2(low="#d73027", mid='#fee090', high="#4575b4", midpoint=2000) + # red:blue
   scale_fill_gradientn(colours = heat.colors(6)) +
-  geom_line(data=em, aes(x=u2, y=p1), color='black') +
+  geom_line(data=em, color='black') +
   scale_x_continuous(TeX("$\\alpha$"), limits=c(0, 2), expand=c(0,0)) +
   scale_y_continuous(TeX("$\\pi_1$"), limits=c(0, 1), expand=c(0,0)) +
-  geom_point(data=data.frame(x=1, y=0.5), color='black') +
+  geom_point(data=data.frame(x=1, y=0.5), shape='x', size=4) +
+  geom_point(data=em %>% head(n=1), shape=1 , size=2) +
+  geom_point(data=em %>% tail(n=1), shape=16, size=2) +
   my_theme() + theme(legend.position='none') -> p
 
 ggsave('../results/fig_1.pdf', p, width=4.5, height=3)
@@ -49,16 +52,16 @@ DF <- DF %>%
   mutate(p=n/tot) %>%
   group_by(deg) %>%
   summarize(stat=sum(1/p)) %>%
-  left_join(d %>% group_by(deg) %>% summarize(w=1/n()), by='deg')
+  left_join(DF %>% group_by(deg) %>% summarize(w=1/n()), by='deg')
 
 # read log-degree logit fit
-fit1 <- read_csv("../results/fig2_deg_fit.csv", col_types='cdd') %>% filter(deg == 'alpha')
+fit1 <- read_csv("../results/fig2_data.csv", col_types='cdd') %>% filter(deg == 'alpha')
 # read non-parametric degree log fit
-DFnp <- read_csv("../results/fig2_deg_fit.csv", col_types='cdd') %>% filter(deg != 'alpha') %>%
+DFnp <- read_csv("../results/fig2_data.csv", col_types='cdd') %>% filter(deg != 'alpha') %>%
   filter(coef<20) %>%
   mutate(deg=as.numeric(deg), stat=exp(coef), w=1/se)
 DFnp$stat = DFnp$stat / DFnp[DFnp$deg==1, ]$stat
-fit2 <- lm(stat ~ deg, weights=w, data=DFnp)
+fit2 <- lm(stat ~ 0 + deg, weights=w, data=DFnp)
 
 DF <- rbind(
   # compute Newman
@@ -87,21 +90,16 @@ DF <- DF %>% filter(id %in% c('ldl', 'ls', 'npl')) %>% mutate(ref=1) %>%
 
 ggplot(DF, aes(deg, stat, color=label)) +
   geom_point(shape=20, alpha=0.0) +
-  geom_abline(slope=1, intercept=0, color='grey') +
-  # least squares fit
-  #geom_ribbon(data=DF %>% filter(id=='ls') %>% mutate(ll=ifelse(ll<1, 1, ll)), aes(x=deg, ymin=ll, ymax=ul, fill=label), alpha=0.2, color=NA, show.legend=F) +
+  #geom_abline(slope=1, intercept=0, color='grey') +
   geom_line(data=DF %>% filter(id=='ls'), show.legend=F, size=0.5) +
-  # log-degree fit
-  #geom_ribbon(data=DF %>% filter(id=='ldl'), aes(x=deg, ymin=ll, ymax=ul, fill=label), alpha=0.6, color=NA, show.legend=F) +
   geom_line(data=DF %>% filter(id=='ldl'), show.legend=F, size=0.5) +
-  # extra points
   geom_point(data=DF %>% filter(id=='newman'), shape=20, alpha=0.7) +
   geom_point(data=DF %>% filter(id=='npl'), shape=20, alpha=0.7) +
   scale_x_log10("log Degree", labels=trans_format('log10', math_format(10^.x)), breaks=c(10^0, 10^1, 10^2), expand=c(0,0)) +
   scale_y_log10("Relative likelihood", labels=trans_format('log10', math_format(10^.x)), expand=c(0,0)) +
   coord_cartesian(xlim=c(1, 100), ylim=c(1, 120)) +
   scale_color_brewer(palette='Set1') + 
-  my_theme() + theme(legend.position=c(0.20, 0.79)) -> p
+  my_theme() + theme(legend.position=c(0.20, 0.79), legend.title=element_blank()) -> p
 
 ggsave('../results/fig_2.pdf', p, width=4, height=3)
 
