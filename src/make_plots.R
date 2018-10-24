@@ -65,12 +65,12 @@ fit2 <- lm(stat ~ 0 + deg, weights=w, data=DFnp %>% filter(coef!=1))
 
 DF <- rbind(
   # compute Newman
-  DF %>% select(deg, stat) %>% mutate(id='newman', label='Newman [41]', ll=0, ul=0),
+  DF %>% select(deg, stat) %>% mutate(id='newman', label='Newman', ll=0, ul=0),
   # compute Newman corrected
-  DF %>% mutate(stat=stat*w) %>% select(deg,stat) %>% mutate(id='newman2', label='Newman\nCorrected [44]', ll=0, ul=0),
+  DF %>% mutate(stat=stat*w) %>% select(deg,stat) %>% mutate(id='newman2', label='Newman\nCorrected', ll=0, ul=0),
   # read non-parametric degree logit fits
   DFnp %>% select(deg, stat) %>% mutate(id='npl', label='Individual degree logit', ll=0, ul=0),
-  predict(fit2, data.frame(deg=1:100), interval="confidence") %>% as.data.frame() %>% mutate(deg=1:100, id='ls', label='Least-squares [44]') %>%
+  predict(fit2, data.frame(deg=1:100), interval="confidence") %>% as.data.frame() %>% mutate(deg=1:100, id='ls', label='Least-squares') %>%
     select(deg, stat=fit, id, label, ll=lwr, ul=upr),
   # compute log-degree logit fit
   data.frame(deg=1:100) %>% mutate(stat=deg^fit1$coef, id='ldl', label='Log-degree logit', ll=deg^(fit1$coef - 1.96*fit1$se), ul=deg^(fit1$coef + 1.96*fit1$se))
@@ -85,12 +85,12 @@ DF <- DF %>% filter(id %in% c('ldl', 'ls', 'npl')) %>% mutate(ref=1) %>%
   filter(id != 'newman2') %>%
   mutate(
     stat=stat/ref,
-    label=factor(label, levels=c('Newman [41]','Individual degree logit','Least-squares [44]','Log-degree logit'))
+    label=factor(label, levels=c('Newman','Individual degree logit','Least-squares','Log-degree logit'))
   )
 
 ggplot(DF, aes(deg, stat, color=label)) +
   geom_point(shape=20, alpha=0.0) +
-  geom_abline(slope=1, intercept=0, color='grey') +
+  #geom_abline(slope=1, intercept=0, color='grey') +
   geom_line(data=DF %>% filter(id=='ls'), show.legend=F, size=0.5) +
   geom_line(data=DF %>% filter(id=='ldl'), show.legend=F, size=0.5) +
   geom_point(data=DF %>% filter(id=='newman'), shape=20, alpha=0.7) +
@@ -263,3 +263,23 @@ DF %>%
   scale_y_continuous("Log-likelihood") +
   my_theme(11) -> p
 ggsave('../results/fig_5_si2.pdf', p, width=9, height=3.5)
+
+
+##
+## Figure 6 - Non-parametric per model
+##
+
+rbind(
+  read_csv("~/projects/choosing_to_grow/choose2grow/data/flickr-non_parametric.csv") %>%
+    mutate(Model=paste0('3.', model), data='Flickr'),
+  read_csv("~/projects/choosing_to_grow/choose2grow/data/flickr-non_parametric.csv") %>%
+    mutate(Model=paste0('4.', model), data='Citations')
+) %>%
+  mutate(data=factor(data, levels=c('Flickr','Citations'))) %>%
+  ggplot(aes(x, exp(y), color=Model)) + geom_point(shape=16, size=.7) +
+    scale_x_log10('Degree') +
+    scale_y_log10('Estimate') +
+    facet_wrap(~data) +
+    scale_color_brewer(palette='Set1') +
+    my_theme(11) -> p
+ggsave('../results/fig_6.pdf', p, width=6, height=3)

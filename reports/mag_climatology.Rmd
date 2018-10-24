@@ -306,6 +306,7 @@ make_data <- function(n, seed=NULL){
           group_by(paper_id, option_id) %>% summarize(max_n_papers=max(n_papers)),
         by=c('paper_id','option_id')
       ) %>%
+      mutate(n_citations_f = factor(ifelse(n_citations > 150, 150, n_citations))) %>%
       mutate(is_old=ifelse(delta_years > 10, 1, 0))
     
     H <- DM %>% 
@@ -316,7 +317,7 @@ make_data <- function(n, seed=NULL){
 }
 ```
 
-```{r actually_make_data, eval=F}
+```{r actually_make_data, eval=T}
 # split generation up in parts to not use too much memory at once
 X <- make_data(n=100)
 while(nrow(distinct(X, choice_id)) < 10000) {
@@ -371,4 +372,20 @@ print(paste("Train accuracy  &  ",
     lapply(fs, function(x) acc(x, H_train)) %>% unlist() %>% round(3) %>% paste(collapse=' & '), ' \\'))
 print(paste("Test accuracy   &  ",
     lapply(fs, function(x) acc(x, H_test)) %>% unlist() %>% round(3) %>% paste(collapse=' & '), ' \\'))
+```
+
+```{r np_write}
+f1 <- mlogit(y ~ n_citations_f | 0, H_train)
+f2 <- mlogit(y ~ n_citations_f + has_same_author | 0, H_train)
+f3 <- mlogit(y ~ n_citations_f + has_same_author + log(delta_years) | 0, H_train)
+f4 <- mlogit(y ~ n_citations_f + has_same_author + log(delta_years)  + log(max_n_papers+1) | 0, H_train)
+
+DF <- rbind(
+  data.frame(deg=1:150, est=coef(f1)[1:150], model='1'),
+  data.frame(deg=1:150, est=coef(f2)[1:150], model='2'),
+  data.frame(deg=1:150, est=coef(f3)[1:150], model='3'),
+  data.frame(deg=1:150, est=coef(f4)[1:150], model='4')
+)
+
+write_csv(DF, "~/projects/choosing_to_grow/choose2grow/data/citations-non_parametric.csv")
 ```
