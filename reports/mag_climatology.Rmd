@@ -96,8 +96,6 @@ Rmisc::multiplot(
     ggplot(aes(n_citation, stat)) + geom_line() +
       scale_x_log10("(log) # citations (stated)", limits=c(40, 8000)) +
       scale_y_continuous("Share of citations observed") +
-      #scale_y_log10("# citations (observed)") +
-      #geom_line(data=data.frame(x=10:10000), aes(x, x), color='blue') + 
       ggtitle("Citations - Stated vs Observed") +
       my_theme(),
   cols=2
@@ -170,7 +168,7 @@ Rmisc::multiplot(
     filter(year_published > 1950) %>%
     group_by(cites, year_published) %>% summarize(n=n()) %>%
     group_by(year_published) %>% summarize(n_citation=mean(n, na.rm=T)) %>%
-    ggplot(aes(year_published, n_citation)) + geom_point() + #geom_line() +
+    ggplot(aes(year_published, n_citation)) + geom_point() +
       scale_y_continuous("Avg # citations") +
       scale_x_continuous("Year published") +
       ggtitle("Citations by Age (observed)") +
@@ -179,7 +177,7 @@ Rmisc::multiplot(
   d_raw %>%
     filter(year > 1950) %>%
     group_by(year) %>% summarize(n_citation=mean(n_citation, na.rm=T)) %>%
-    ggplot(aes(year, n_citation)) + geom_point() + #geom_line() +
+    ggplot(aes(year, n_citation)) + geom_point() +
       scale_y_continuous("Avg # citations") +
       scale_x_continuous("Year published") +
       ggtitle("Citations by Age (stated)") +
@@ -306,7 +304,6 @@ make_data <- function(n, seed=NULL){
           group_by(paper_id, option_id) %>% summarize(max_n_papers=max(n_papers)),
         by=c('paper_id','option_id')
       ) %>%
-      mutate(n_citations_f = factor(ifelse(n_citations > 150, 150, n_citations))) %>%
       mutate(is_old=ifelse(delta_years > 10, 1, 0))
     
     H <- DM %>% 
@@ -317,7 +314,7 @@ make_data <- function(n, seed=NULL){
 }
 ```
 
-```{r actually_make_data, eval=T}
+```{r actually_make_data, eval=F}
 # split generation up in parts to not use too much memory at once
 X <- make_data(n=100)
 while(nrow(distinct(X, choice_id)) < 10000) {
@@ -326,7 +323,7 @@ while(nrow(distinct(X, choice_id)) < 10000) {
   X <- rbind(X, Y[!(Y$choice_id %in% X$choice_id), ])  # join together
 }
 message(nrow(distinct(X, choice_id)))
-samples = distinct(X, choice_id) %>% sample_n(10000) %>% .$choice_id
+samples <- distinct(X, choice_id) %>% sample_n(10000) %>% .$choice_id
 
 # convert to mlogit.data
 H_train <- X %>%
@@ -342,19 +339,23 @@ write_csv(H_test, "../results/mag_cli_H_test.csv")
 
 ```{r data_reload}
 H_train <- read.csv("../results/mag_cli_H_train.csv") %>%
+  mutate(max_n_papers=ifelse(is.na(max_n_papers), 0, max_n_papers)) %>%
+  mutate(has_deg=ifelse(n_citations > 0, 1, 0)) %>%
   mlogit.data(chid.var='choice_id', choice="y", alt.var='alt_id')
 H_test  <- read.csv("../results/mag_cli_H_test.csv") %>%
+  mutate(max_n_papers=ifelse(is.na(max_n_papers), 0, max_n_papers)) %>%
+  mutate(has_deg=ifelse(n_citations > 0, 1, 0)) %>%
   mlogit.data(chid.var='choice_id', choice="y", alt.var='alt_id')
 ```
 
 ```{r model_models}
 fs <- list(
-  mlogit(y ~ log(n_citations+1) | 0, H_train),
-  mlogit(y ~ log(n_citations+1) + has_same_author | 0, H_train),
-  mlogit(y ~ log(n_citations+1) + has_same_author + log(delta_years) | 0, H_train),
-  mlogit(y ~ log(n_citations+1) + has_same_author + log(delta_years)  + log(max_n_papers+1) | 0, H_train),
-  mlogit(y ~ log(n_citations+1) + has_same_author + log(delta_years)  + log(max_n_papers+1) + n_same_keywords|  0, H_train),
-  mlogit(y ~ log(n_citations+1) + has_same_author + is_old*log(n_citations+1) | 0, H_train)
+  mlogit(y ~ safe_log(n_citations) + has_deg | 0, H_train),
+  mlogit(y ~ safe_log(n_citations) + has_deg + has_same_author | 0, H_train),
+  mlogit(y ~ safe_log(n_citations) + has_deg + has_same_author + log(delta_years) | 0, H_train),
+  mlogit(y ~ safe_log(n_citations) + has_deg + has_same_author + log(delta_years)  + safe_log(max_n_papers) | 0, H_train),
+  mlogit(y ~ safe_log(n_citations) + has_deg + has_same_author + log(delta_years)  + safe_log(max_n_papers) + n_same_keywords|  0, H_train),
+  mlogit(y ~ safe_log(n_citations) + has_deg + has_same_author + is_old*safe_log(n_citations) | 0, H_train)
 )
 ```
 
@@ -362,8 +363,8 @@ fs <- list(
 stargazer::stargazer(
   fs,
   dep.var.caption = "",
-  covariate.labels = c("log Citations", "Has same author", "log Age", "Max papers by author", "# same keywords", "+10 years", "+10 years*log Citations"),
-  header=FALSE, 
+  covariate.labels = c("log Citations", "Has degree", "Has same author", "log Age", "Max papers by author", "# same keywords", "+10 years", "+10 years*log Citations"),
+  header=FALSE,
   type='text')
 ```
 
@@ -375,17 +376,21 @@ print(paste("Test accuracy   &  ",
 ```
 
 ```{r np_write}
-f1 <- mlogit(y ~ n_citations_f | 0, H_train)
-f2 <- mlogit(y ~ n_citations_f + has_same_author | 0, H_train)
-f3 <- mlogit(y ~ n_citations_f + has_same_author + log(delta_years) | 0, H_train)
-f4 <- mlogit(y ~ n_citations_f + has_same_author + log(delta_years)  + log(max_n_papers+1) | 0, H_train)
+H_train <- read.csv("../results/mag_cli_H_train.csv") %>%
+  mutate(max_n_papers=ifelse(is.na(max_n_papers), 0, max_n_papers)) %>%
+  mutate(n_citations_f = ifelse(n_citations > 130, 130, n_citations)) %>%
+  group_by(choice_id) %>% filter(sum(ifelse(y, 1, 0)) == 1) %>% ungroup() %>%
+  mlogit.data(chid.var='choice_id', choice="y", alt.var='alt_id')
+
+f1 <- mlogit(y ~ as.factor(n_citations_f) | 0, H_train)
+f3 <- mlogit(y ~ as.factor(n_citations_f) + has_same_author + log(delta_years) | 0, H_train)
 
 DF <- rbind(
-  data.frame(deg=1:150, est=coef(f1)[1:150], model='1'),
-  data.frame(deg=1:150, est=coef(f2)[1:150], model='2'),
-  data.frame(deg=1:150, est=coef(f3)[1:150], model='3'),
-  data.frame(deg=1:150, est=coef(f4)[1:150], model='4')
+  data.frame(deg=1:130  , est=coef(f1)[1:130] , se=coef(summary(f1))[1:130,2] , model='1'),
+  data.frame(deg='alpha', est=coef(fs[[1]])[1], se=coef(summary(fs[[1]]))[1,2], model='1'),
+  data.frame(deg=1:130  , est=coef(f3)[1:130] , se=coef(summary(f3))[1:130,2] , model='3'),
+  data.frame(deg='alpha', est=coef(fs[[3]])[1], se=coef(summary(fs[[3]]))[1,2], model='3')
 )
 
-write_csv(DF, "~/projects/choosing_to_grow/choose2grow/data/citations-non_parametric.csv")
+write_csv(DF, "../results/fig6_citations.csv")
 ```

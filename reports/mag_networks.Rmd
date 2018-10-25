@@ -316,7 +316,7 @@ make_data <- function(n, seed=NULL){
 }
 ```
 
-```{r actually_make_data, eval=T}
+```{r actually_make_data, eval=F}
 # split generation up in parts to not use too much memory at once
 X <- make_data(n=100)
 while(nrow(distinct(X, choice_id)) < 10000) {
@@ -325,7 +325,7 @@ while(nrow(distinct(X, choice_id)) < 10000) {
   X <- rbind(X, Y[!(Y$choice_id %in% X$choice_id), ])  # join together
 }
 message(nrow(distinct(X, choice_id)))
-samples = distinct(X, choice_id) %>% sample_n(10000) %>% .$choice_id
+samples <- distinct(X, choice_id) %>% sample_n(10000) %>% .$choice_id
 
 # convert to mlogit.data
 H_train <- X %>%
@@ -341,19 +341,23 @@ write_csv(H_test, "../results/mag_net_H_test.csv")
 
 ```{r data_reload}
 H_train <- read.csv("../results/mag_net_H_train.csv") %>%
+  mutate(max_n_papers=ifelse(is.na(max_n_papers), 0, max_n_papers)) %>%
+  mutate(has_deg=ifelse(n_citations > 0, 1, 0)) %>%
   mlogit.data(chid.var='choice_id', choice="y", alt.var='alt_id')
 H_test  <- read.csv("../results/mag_net_H_test.csv") %>%
+  mutate(max_n_papers=ifelse(is.na(max_n_papers), 0, max_n_papers)) %>%
+  mutate(has_deg=ifelse(n_citations > 0, 1, 0)) %>%
   mlogit.data(chid.var='choice_id', choice="y", alt.var='alt_id')
 ```
 
 ```{r model_models}
 fs <- list(
-  mlogit(y ~ log(n_citations+1) | 0, H_train),
-  mlogit(y ~ log(n_citations+1) + has_same_author | 0, H_train),
-  mlogit(y ~ log(n_citations+1) + has_same_author + log(delta_years) | 0, H_train),
-  mlogit(y ~ log(n_citations+1) + has_same_author + log(delta_years)  + log(max_n_papers+1) | 0, H_train),
-  mlogit(y ~ log(n_citations+1) + has_same_author + log(delta_years)  + log(max_n_papers+1) + n_same_keywords|  0, H_train),
-  mlogit(y ~ log(n_citations+1) + has_same_author + is_old*log(n_citations+1) | 0, H_train)
+  mlogit(y ~ safe_log(n_citations) + has_deg | 0, H_train),
+  mlogit(y ~ safe_log(n_citations) + has_deg + has_same_author | 0, H_train),
+  mlogit(y ~ safe_log(n_citations) + has_deg + has_same_author + log(delta_years) | 0, H_train),
+  mlogit(y ~ safe_log(n_citations) + has_deg + has_same_author + log(delta_years)  + safe_log(max_n_papers) | 0, H_train),
+  mlogit(y ~ safe_log(n_citations) + has_deg + has_same_author + log(delta_years)  + safe_log(max_n_papers) + n_same_keywords|  0, H_train),
+  mlogit(y ~ safe_log(n_citations) + has_deg + has_same_author + is_old*safe_log(n_citations) | 0, H_train)
 )
 ```
 
@@ -361,8 +365,8 @@ fs <- list(
 stargazer::stargazer(
   fs,
   dep.var.caption = "",
-  covariate.labels = c("log Citations", "Has same author", "log Age", "Max papers by author", "# same keywords", "+10 years", "+10 years*log Citations"),
-  header=FALSE, 
+  covariate.labels = c("log Citations", "Has degree", "Has same author", "log Age", "Max papers by author", "# same keywords", "+10 years", "+10 years*log Citations"),
+  header=FALSE,
   type='text')
 ```
 

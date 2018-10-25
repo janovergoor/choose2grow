@@ -96,26 +96,7 @@ acc <- function(f, data) {
     summarize(acc=mean(choice==correct)) %>% .$acc %>% as.numeric()
 }
 
-# compute the AUC of a model on new data
-# require(pROC)
-auc <- function(f, data) {
-  # compute predictions
-  P <- predict(f, newdata=data) %>% as.data.frame()
-  dp <- P %>% mutate(choice_id=rownames(P)) %>% gather(choice, score, -choice_id)
-  inner_join(
-    # actuals
-    data %>% filter(y) %>% select(choice_id, correct=alt_id) %>% mutate(choice_id=as.character(choice_id)),
-    # predicted
-    dp %>%
-      # sort by score and random to break ties randomly
-      mutate(r=runif(nrow(dp))) %>% group_by(choice_id) %>% arrange(-score, r) %>%
-      # take highest score
-      mutate(n=row_number()) %>% filter(n==1),
-    by='choice_id'
-  ) %>% ungroup() -> x
-  # shuffle classes to be able to do multi-class AUC
-  x$correct2 <- sample(1:25, nrow(x), replace=T)
-  x$choice2 <- ifelse(x$choice==1, x$correct2, x$choice) # 1/25 chance of wrongly getting the 'right' answer
-  #x$choice2 <- ifelse(x$choice!=1 & x$correct2==x$choice2, , x$choice2)
-  as.numeric(pROC::multiclass.roc(as.numeric(x$correct2), as.numeric(x$choice2), quiet=T)$auc)
-}
+# version of log that returns 0 if input is 0
+safe_log <- Vectorize(function(x) {
+  if(x==0 | is.na(x)) 0 else log(x)
+})

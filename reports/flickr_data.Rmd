@@ -16,6 +16,7 @@ output:
 library(knitr)
 knitr::opts_chunk$set(echo=F, warning=F, cache=T, message=F, fig.width=6, fig.height=2.5)
 source("helper.R")
+mutate = dplyr::mutate
 ```
 
 Read data
@@ -87,6 +88,7 @@ ds = '061105'
 fn <- sprintf("~/projects/choosing_to_grow/choose2grow/data/flickr-growth_choices_%s.csv", ds)
 DM <- read_csv(fn, col_types='iiiiii') %>%
   mutate(
+    has_deg=ifelse(deg > 0, 1, 0),
     is_fof=as.factor(ifelse(is.na(hops), 0, ifelse(hops > 2, 0, 1))),
     hops_f=as.factor(ifelse(is.na(hops), 'none', ifelse(hops >=6 , '6+', as.character(hops)))),
     hops_f=factor(hops_f, levels=c("none","2","3","4","5","6+"))
@@ -101,13 +103,11 @@ examples <- DM %>% distinct(choice_id) %>% mutate(r=runif(22000)) %>% arrange(r)
 H_train <- DM %>% inner_join(head(examples, 20000), by='choice_id') %>%
      group_by(choice_id) %>% mutate(alt_id=row_number()) %>% ungroup() %>%
      select(choice_id, alt_id, y, deg:hops_f) %>%
-     mutate(deg_f = factor(ifelse(deg > 150, 150, deg))) %>%
      mlogit.data(shape="long", chid.var='choice_id', choice="y", alt.var='alt_id')
 
 H_test <- DM %>% inner_join(tail(examples, 2000), by='choice_id') %>%
      group_by(choice_id) %>% mutate(alt_id=row_number()) %>% ungroup() %>%
      select(choice_id, alt_id, y, deg:hops_f) %>%
-     mutate(deg_f = factor(ifelse(deg > 150, 150, deg))) %>%
      mlogit.data(shape="long", chid.var='choice_id', choice="y", alt.var='alt_id')
 
 # extra "log hops" model, need to remove NAs and choice sets where choice was NA
@@ -126,13 +126,13 @@ H_train %>%
 
 ```{r model_models1}
 fs <- list(
-  #mlogit(y ~ log(deg+1) | 0, H_train),
-  mlogit(y ~ log(deg+1) + recip | 0, H_train),
-  mlogit(y ~              recip + is_fof | 0, H_train),
-  mlogit(y ~ log(deg+1) + recip + is_fof | 0, H_train),
-  mlogit(y ~ log(deg+1) + recip + hops_f | 0, H_train),
-  mlogit(y ~ log(deg+1) + recip + log(hops) | 0, H_train2),
-  mlogit(y ~ log(deg+1) + recip + log(n_paths+1) | 0, H_train)
+  mlogit(y ~ safe_log(deg) + has_deg | 0, H_train),
+  mlogit(y ~ safe_log(deg) + has_deg + recip | 0, H_train),
+  mlogit(y ~                           recip + is_fof | 0, H_train),
+  mlogit(y ~ safe_log(deg) + has_deg + recip + is_fof | 0, H_train),
+  mlogit(y ~ safe_log(deg) + has_deg + recip + hops_f | 0, H_train),
+  # mlogit(y ~ safe_log(deg) + has_deg + recip + safe_log(hops) | 0, H_train2),
+  mlogit(y ~ safe_log(deg) + has_deg + recip + safe_log(n_paths) | 0, H_train)
 )
 ```
 
@@ -140,11 +140,12 @@ fs <- list(
 stargazer::stargazer(
   fs,
   dep.var.caption = "",
-  covariate.labels = c("log In-Degree", "Reciprocal", "Is FoF",
+  covariate.labels = c("log In-Degree", "Has degree", "Reciprocal", "Is FoF",
                        "2 Hops", "3 Hops", "4 Hops", "5 Hops", "6+ Hops",
-                       "log Hops", "log Paths"),
-  header=FALSE, 
-  type='text')
+                       #"log Hops",
+                       "log Paths"),
+  header=FALSE,
+  type='text')    
 ```
 
 ```{r acc1}
@@ -153,23 +154,26 @@ print(paste("Train accuracy  &  ",
 print(paste("Test accuracy   &  ",
     lapply(fs, function(x) acc(x, H_test)) %>% unlist() %>% round(4) %>% paste(collapse=' & '), ' \\'))
 ```
-```{r auc1}
-print(paste("Test AUC        &  ",
-    lapply(fs, function(x) auc(x, H_test)) %>% unlist() %>% round(3) %>% paste(collapse=' & '), ' \\'))
-```
 
 ```{r np_write}
-f1 <- mlogit(y ~ deg_f + recip | 0, H_train)
-f3 <- mlogit(y ~ deg_f + recip + is_fof | 0, H_train)
-f4 <- mlogit(y ~ deg_f + recip + hops_f | 0, H_train)
+H_train3 <- H_train %>%
+  mutate(deg = ifelse(deg > 300, 300, deg)) %>%
+  mlogit.data(chid.var='choice_id', choice="y", alt.var='alt_id')
+
+f1 <- mlogit(y ~ as.factor(deg) + recip | 0, H_train3)
+f3 <- mlogit(y ~ as.factor(deg) + recip + is_fof | 0, H_train3)
+f4 <- mlogit(y ~ as.factor(deg) + recip + hops_f | 0, H_train3)
 
 DF <- rbind(
-  data.frame(deg=1:150, est=coef(f1)[1:150], model='1'),
-  data.frame(deg=1:150, est=coef(f3)[1:150], model='3'),
-  data.frame(deg=1:150, est=coef(f4)[1:150], model='4')
+  data.frame(deg=1:130  , est=coef(f1)[1:130] , se=coef(summary(f1))[1:130,2] , model='1'),
+  data.frame(deg='alpha', est=coef(fs[[2]])[1], se=coef(summary(fs[[2]]))[1,2], model='1'),
+  data.frame(deg=1:130  , est=coef(f3)[1:130] , se=coef(summary(f3))[1:130,2] , model='3'),
+  data.frame(deg='alpha', est=coef(fs[[4]])[1], se=coef(summary(fs[[4]]))[1,2], model='3'),
+  data.frame(deg=1:130  , est=coef(f4)[1:130] , se=coef(summary(f4))[1:130,2] , model='4'),
+  data.frame(deg='alpha', est=coef(fs[[5]])[1], se=coef(summary(fs[[5]]))[1,2], model='4')
 )
 
-write_csv(DF, "~/projects/choosing_to_grow/choose2grow/data/flickr-non_parametric.csv")
+write_csv(DF, "../results/fig6_flickr.csv")
 ```
 
 
@@ -181,6 +185,7 @@ ds = '070301'
 fn <- sprintf("~/projects/choosing_to_grow/choose2grow/data/flickr-growth_choices_%s.csv", ds)
 DM <- read_csv(fn, col_types='iiiiii') %>%
   mutate(
+    has_deg=ifelse(deg > 0, 1, 0),
     is_fof=as.factor(ifelse(is.na(hops), 0, ifelse(hops > 2, 0, 1))),
     hops_f=as.factor(ifelse(is.na(hops), 'none', ifelse(hops >=6 , '6+', as.character(hops)))),
     hops_f=factor(hops_f, levels=c("none","2","3","4","5","6+"))
@@ -207,16 +212,18 @@ H_train2 <- H_train %>%
       filter(!is.na(hops)) %>%
       group_by(choice_id) %>% filter(max(y)==1) %>% ungroup() %>%
       mlogit.data(shape="long", chid.var='choice_id', choice="y", alt.var='alt_id')
+
 ```
 
 ```{r model_models2}
 fs <- list(
-  mlogit(y ~ log(deg+1) + recip | 0, H_train),
-  mlogit(y ~              recip + is_fof | 0, H_train),
-  mlogit(y ~ log(deg+1) + recip + is_fof | 0, H_train),
-  mlogit(y ~ log(deg+1) + recip + hops_f | 0, H_train),
-  mlogit(y ~ log(deg+1) + recip + log(hops) | 0, H_train2),
-  mlogit(y ~ log(deg+1) + recip + log(n_paths+1) | 0, H_train)
+  mlogit(y ~ safe_log(deg) + has_deg | 0, H_train),
+  mlogit(y ~ safe_log(deg) + has_deg + recip | 0, H_train),
+  mlogit(y ~                           recip + is_fof | 0, H_train),
+  mlogit(y ~ safe_log(deg) + has_deg + recip + is_fof | 0, H_train),
+  mlogit(y ~ safe_log(deg) + has_deg + recip + hops_f | 0, H_train),
+  # mlogit(y ~ safe_log(deg) + has_deg + recip + safe_log(hops) | 0, H_train2),
+  mlogit(y ~ safe_log(deg) + has_deg + recip + safe_log(n_paths) | 0, H_train)
 )
 ```
 
@@ -224,9 +231,10 @@ fs <- list(
 stargazer::stargazer(
   fs,
   dep.var.caption = "",
-  covariate.labels = c("log In-Degree", "Reciprocal", "Is FoF",
+  covariate.labels = c("log In-Degree", "Has degree", "Reciprocal", "Is FoF",
                        "2 Hops", "3 Hops", "4 Hops", "5 Hops", "6+ Hops",
-                       "log Hops", "log Paths"),
+                       #"log Hops",
+                       "log Paths"),
   header=FALSE, 
   type='text')
 ```
@@ -236,8 +244,4 @@ print(paste("Train accuracy  &  ",
     lapply(fs, function(x) acc(x, H_train)) %>% unlist() %>% round(4) %>% paste(collapse=' & '), ' \\'))
 print(paste("Test accuracy   &  ",
     lapply(fs, function(x) acc(x, H_test)) %>% unlist() %>% round(4) %>% paste(collapse=' & '), ' \\'))
-```
-```{r auc2}
-print(paste("Test AUC        &  ",
-    lapply(fs, function(x) auc(x, H_test)) %>% unlist() %>% round(3) %>% paste(collapse=' & '), ' \\'))
 ```

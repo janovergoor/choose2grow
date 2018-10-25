@@ -26,8 +26,6 @@ em = read_csv("../results/fig1_data_em.csv", col_types='iddddd') %>%
 ggplot(DF, aes(x, y)) +
   geom_raster(aes(fill=z), interpolate=T) +
   geom_contour(aes(z=z), colour="black", bins=15, alpha=0.25) +
-  #stat_contour(geom="polygon", aes(z=z, fill=..level.. ), bins=15) +
-  #scale_fill_gradient2(low="#d73027", mid='#fee090', high="#4575b4", midpoint=2000) + # red:blue
   scale_fill_gradientn(colours = heat.colors(6)) +
   geom_line(data=em, color='black') +
   scale_x_continuous(TeX("$\\alpha$"), limits=c(0, 2), expand=c(0,0)) +
@@ -90,7 +88,6 @@ DF <- DF %>% filter(id %in% c('ldl', 'ls', 'npl')) %>% mutate(ref=1) %>%
 
 ggplot(DF, aes(deg, stat, color=label)) +
   geom_point(shape=20, alpha=0.0) +
-  #geom_abline(slope=1, intercept=0, color='grey') +
   geom_line(data=DF %>% filter(id=='ls'), show.legend=F, size=0.5) +
   geom_line(data=DF %>% filter(id=='ldl'), show.legend=F, size=0.5) +
   geom_point(data=DF %>% filter(id=='newman'), shape=20, alpha=0.7) +
@@ -168,11 +165,10 @@ ggplot(DF, aes(x=r_off, y=mean_a, color=p)) + geom_line() +
 ggsave('../results/fig_3_si1.pdf', p, width=4.5, height=3.5)
 
 ggplot(DF, aes(x=r, y=p_hat, color=p)) + geom_line() +
-  #geom_segment(aes(x=r_off, xend=r_off, y=1/(ll_a-1), yend=1/(ul_a-1))) +
   geom_hline(yintercept=1, color='grey', linetype='dashed') + geom_line() +
   scale_color_brewer(palette='Set1') + 
   scale_x_continuous("r", breaks=seq(0, 1, 0.25), labels=c('0','0.25','0.50','0.75','1')) +
-  scale_y_continuous(TeX("Estimate of p"), expand=c(0,0), limits=c(0, 1.05)) +#, breaks=c(0.6, 0.8, 1.0, 1.2)) +
+  scale_y_continuous(TeX("Estimate of p"), expand=c(0,0), limits=c(0, 1.05)) +
   ggtitle("p fits for (r,p) graphs") +
   facet_grid(Type2 ~ Type) +
   my_theme(11) -> p
@@ -193,7 +189,7 @@ ggsave('../results/fig_3_si3.pdf', p, width=4.5, height=3.5)
 ##
 
 DF <- read_csv("../results/fig4_data.csv", col_types='ccdd') %>%
-  mutate(Model=ifelse(model=='p', 'Copy\nmodel', 'Jackson\nRogers'))
+  mutate(Model=ifelse(model=='p', 'Copy\nmodel', 'Local\nsearch'))
 
 DF %>%
   ggplot(aes(p, ll, color=Model)) + geom_line() +
@@ -243,7 +239,7 @@ ggsave('../results/fig_5.pdf', p, width=6, height=3)
 DF %>%
   mutate(Model=ifelse(Model=='p-mixed', 'PA', 'PA-FoF')) %>%
   ggplot(aes(r, mean, color=p)) +
-  geom_line(aes(linetype=Type2)) + #geom_point() +
+  geom_line(aes(linetype=Type2)) +
   geom_segment(aes(x=r, xend=r, y=ll, yend=ul)) +
   facet_grid(Type ~ Model) +
   scale_color_brewer(palette='Set1') + 
@@ -269,17 +265,35 @@ ggsave('../results/fig_5_si2.pdf', p, width=9, height=3.5)
 ## Figure 6 - Non-parametric per model
 ##
 
-rbind(
-  read_csv("~/projects/choosing_to_grow/choose2grow/data/flickr-non_parametric.csv") %>%
-    mutate(Model=paste0('3.', model), data='Flickr'),
-  read_csv("~/projects/choosing_to_grow/choose2grow/data/flickr-non_parametric.csv") %>%
-    mutate(Model=paste0('4.', model), data='Citations')
-) %>%
-  mutate(data=factor(data, levels=c('Flickr','Citations'))) %>%
-  ggplot(aes(x, exp(y), color=Model)) + geom_point(shape=16, size=.7) +
+DFt <- rbind(
+    read_csv("~/projects/choosing_to_grow/choose2grow/results/fig6_flickr.csv", col_types='cddc') %>%
+      mutate(Model=paste0('3.', model), data='Flickr'),
+    read_csv("~/projects/choosing_to_grow/choose2grow/results/fig6_citations.csv", col_types='cddc') %>%
+      mutate(Model=paste0('4.', model), data='Citations')
+  ) %>%
+  mutate(data=factor(data, levels=c('Flickr','Citations')))
+
+DF <- DFt %>% filter(deg != 'alpha') %>% mutate(deg=as.numeric(deg)) %>%
+  filter(est < 9) %>%
+  mutate(est=exp(est)) %>%
+  group_by(Model) %>% mutate(est=est/min(est)) %>% ungroup()
+
+DF2 <- data.frame(deg='alpha', x=1:130) %>%
+  inner_join(DFt %>% filter(deg == 'alpha'), by='deg') %>%
+  mutate(est=x^est) %>%
+  arrange(Model, x) %>%
+  select(deg=x, est, data, Model)
+
+DF %>%
+  ggplot(aes(deg, est, color=Model)) + 
+    geom_line(alpha=0) +
+    geom_abline(intercept=0, slope=1, color='black', linetype='dashed') +
+    geom_point(shape=16, size=.7, show.legend=F) +
+    geom_line(data=DF2) +
     scale_x_log10('Degree') +
     scale_y_log10('Estimate') +
-    facet_wrap(~data) +
+    facet_wrap(~data, scales='free_x') +
     scale_color_brewer(palette='Set1') +
+    #guides(colour=guide_legend(override.aes=list(alpha = 1))) +
     my_theme(11) -> p
 ggsave('../results/fig_6.pdf', p, width=6, height=3)
