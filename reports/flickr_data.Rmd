@@ -126,13 +126,13 @@ H_train %>%
 
 ```{r model_models1}
 fs <- list(
-  mlogit(y ~ safe_log(deg) + has_deg | 0, H_train),
-  mlogit(y ~ safe_log(deg) + has_deg + recip | 0, H_train),
+  mlogit(y ~ censored_log(deg, min=1) + has_deg | 0, H_train),
+  mlogit(y ~ censored_log(deg, min=1) + has_deg + recip | 0, H_train),
   mlogit(y ~                           recip + is_fof | 0, H_train),
-  mlogit(y ~ safe_log(deg) + has_deg + recip + is_fof | 0, H_train),
-  mlogit(y ~ safe_log(deg) + has_deg + recip + hops_f | 0, H_train),
-  # mlogit(y ~ safe_log(deg) + has_deg + recip + safe_log(hops) | 0, H_train2),
-  mlogit(y ~ safe_log(deg) + has_deg + recip + safe_log(n_paths) | 0, H_train)
+  mlogit(y ~ censored_log(deg, min=1) + has_deg + recip + is_fof | 0, H_train),
+  mlogit(y ~ censored_log(deg, min=1) + has_deg + recip + hops_f | 0, H_train),
+  # mlogit(y ~ censored_log(deg, min=1) + has_deg + recip + safe_log(hops) | 0, H_train2),
+  mlogit(y ~ censored_log(deg, min=1) + has_deg + recip + safe_log(n_paths) | 0, H_train)
 )
 ```
 
@@ -157,7 +157,7 @@ print(paste("Test accuracy   &  ",
 
 ```{r np_write}
 H_train3 <- H_train %>%
-  mutate(deg = ifelse(deg > 300, 300, deg)) %>%
+  mutate(deg = ifelse(deg > 100, 101, deg)) %>%
   mlogit.data(chid.var='choice_id', choice="y", alt.var='alt_id')
 
 f1 <- mlogit(y ~ as.factor(deg) + recip | 0, H_train3)
@@ -165,15 +165,41 @@ f3 <- mlogit(y ~ as.factor(deg) + recip + is_fof | 0, H_train3)
 f4 <- mlogit(y ~ as.factor(deg) + recip + hops_f | 0, H_train3)
 
 DF <- rbind(
-  data.frame(deg=1:130  , est=coef(f1)[1:130] , se=coef(summary(f1))[1:130,2] , model='1'),
+  data.frame(deg=1:100  , est=coef(f1)[1:100] , se=coef(summary(f1))[1:100,2] , model='1'),
   data.frame(deg='alpha', est=coef(fs[[2]])[1], se=coef(summary(fs[[2]]))[1,2], model='1'),
-  data.frame(deg=1:130  , est=coef(f3)[1:130] , se=coef(summary(f3))[1:130,2] , model='3'),
+  data.frame(deg=1:100  , est=coef(f3)[1:100] , se=coef(summary(f3))[1:100,2] , model='3'),
   data.frame(deg='alpha', est=coef(fs[[4]])[1], se=coef(summary(fs[[4]]))[1,2], model='3'),
-  data.frame(deg=1:130  , est=coef(f4)[1:130] , se=coef(summary(f4))[1:130,2] , model='4'),
+  data.frame(deg=1:100  , est=coef(f4)[1:100] , se=coef(summary(f4))[1:100,2] , model='4'),
   data.frame(deg='alpha', est=coef(fs[[5]])[1], se=coef(summary(fs[[5]]))[1,2], model='4')
 )
 
 write_csv(DF, "../results/fig6_flickr.csv")
+```
+
+```{r np_write2}
+D_test <- rbind(
+    data.frame(choice_id=1, alt_id=0, y=0, deg=0, has_deg=0, recip=0, is_fof=0, hops=NA),
+    data.frame(choice_id=1, alt_id=1:100, y=0, deg=1:100, has_deg=1, recip=0, is_fof=0, hops=NA)
+  ) %>%
+  mutate(
+    hops_f=as.factor(ifelse(is.na(hops), 'none', ifelse(hops >=6 , '6+', as.character(hops)))),
+    hops_f=factor(hops_f, levels=c("none","2","3","4","5","6+"))
+  ) %>%
+  mlogit.data(chid.var='choice_id', choice="y", alt.var='alt_id')
+
+DF2 <- rbind(
+  data.frame(deg=0    , est=1/sum(exp(coef(f1)[1:100])), model='1', type='point'),
+  data.frame(deg=1:100, est=exp(coef(f1)[1:100])/sum(exp(coef(f1)[1:100])), model='1', type='point'),
+  data.frame(deg=0:100, est=predict(fs[[2]], D_test), model='1', type='line'),
+  data.frame(deg=0    , est=1/sum(exp(coef(f3)[1:100])), model='3', type='point'),
+  data.frame(deg=1:100, est=exp(coef(f3)[1:100])/sum(exp(coef(f3)[1:100])), model='3', type='point'),
+  data.frame(deg=0:100, est=predict(fs[[4]], D_test), model='3', type='line'),
+  data.frame(deg=0    , est=1/sum(exp(coef(f4)[1:100])), model='4', type='point'),
+  data.frame(deg=1:100, est=exp(coef(f4)[1:100])/sum(exp(coef(f4)[1:100])), model='4', type='point'),
+  data.frame(deg=0:100, est=predict(fs[[5]], D_test), model='4', type='line')
+)
+
+write_csv(DF2, "../results/fig6_flickr2.csv")
 ```
 
 
@@ -217,13 +243,13 @@ H_train2 <- H_train %>%
 
 ```{r model_models2}
 fs <- list(
-  mlogit(y ~ safe_log(deg) + has_deg | 0, H_train),
-  mlogit(y ~ safe_log(deg) + has_deg + recip | 0, H_train),
+  mlogit(y ~ censored_log(deg, min=1) + has_deg | 0, H_train),
+  mlogit(y ~ censored_log(deg, min=1) + has_deg + recip | 0, H_train),
   mlogit(y ~                           recip + is_fof | 0, H_train),
-  mlogit(y ~ safe_log(deg) + has_deg + recip + is_fof | 0, H_train),
-  mlogit(y ~ safe_log(deg) + has_deg + recip + hops_f | 0, H_train),
-  # mlogit(y ~ safe_log(deg) + has_deg + recip + safe_log(hops) | 0, H_train2),
-  mlogit(y ~ safe_log(deg) + has_deg + recip + safe_log(n_paths) | 0, H_train)
+  mlogit(y ~ censored_log(deg, min=1) + has_deg + recip + is_fof | 0, H_train),
+  mlogit(y ~ censored_log(deg, min=1) + has_deg + recip + hops_f | 0, H_train),
+  # mlogit(y ~ censored_log(deg, min=1) + has_deg + recip + safe_log(hops) | 0, H_train2),
+  mlogit(y ~ censored_log(deg, min=1) + has_deg + recip + safe_log(n_paths) | 0, H_train)
 )
 ```
 

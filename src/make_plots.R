@@ -31,8 +31,8 @@ ggplot(DF, aes(x, y)) +
   scale_x_continuous(TeX("$\\alpha$"), limits=c(0, 2), expand=c(0,0)) +
   scale_y_continuous(TeX("$\\pi_1$"), limits=c(0, 1), expand=c(0,0)) +
   geom_point(data=data.frame(x=1, y=0.5), shape='x', size=4) +
-  geom_point(data=em %>% head(n=1), shape=1 , size=2) +
-  geom_point(data=em %>% tail(n=1), shape=16, size=2) +
+  geom_point(data=em %>% head(n=1), shape=1 , size=3) +
+  geom_point(data=em %>% tail(n=1), shape=16, size=3) +
   my_theme() + theme(legend.position='none') -> p
 
 ggsave('../results/fig_1.pdf', p, width=4.5, height=3)
@@ -43,7 +43,9 @@ ggsave('../results/fig_1.pdf', p, width=4.5, height=3)
 ## Figure 2 - Attachment function comparing Newman,Pham,degree-model
 ##
 
+# read edge stats
 DF <- read_csv("../data/choices_grouped/test_pa.csv", col_types='iiii')
+# compute newman attachment function
 DF <- DF %>%
   filter(c==1) %>%
   inner_join(DF %>% group_by(choice_id) %>% summarize(tot=sum(n)), by='choice_id') %>%
@@ -58,22 +60,27 @@ fit1 <- read_csv("../results/fig2_data.csv", col_types='cdd') %>% filter(deg == 
 DFnp <- read_csv("../results/fig2_data.csv", col_types='cdd') %>% filter(deg != 'alpha') %>%
   filter(coef<20) %>%
   mutate(deg=as.numeric(deg), stat=exp(coef), w=1/se)
+# normalize by coefficient for degree 1
 DFnp$stat = DFnp$stat / DFnp[DFnp$deg==1, ]$stat
+# least squares fit of normalized coefficients
 fit2 <- lm(stat ~ 0 + deg, weights=w, data=DFnp %>% filter(coef!=1))
 
+# join results together
 DF <- rbind(
-  # compute Newman
+  # Newman
   DF %>% select(deg, stat) %>% mutate(id='newman', label='Newman', ll=0, ul=0),
-  # compute Newman corrected
+  # Newman corrected
   DF %>% mutate(stat=stat*w) %>% select(deg,stat) %>% mutate(id='newman2', label='Newman\nCorrected', ll=0, ul=0),
-  # read non-parametric degree logit fits
-  DFnp %>% select(deg, stat) %>% mutate(id='npl', label='Individual degree logit', ll=0, ul=0),
+  # non-parametric coefficients
+  DFnp %>% select(deg, stat) %>% mutate(id='npl', label='Non-parametric logit', ll=0, ul=0),
+  # create predicted values of least squares fit
   predict(fit2, data.frame(deg=1:100), interval="confidence") %>% as.data.frame() %>% mutate(deg=1:100, id='ls', label='Least-squares') %>%
     select(deg, stat=fit, id, label, ll=lwr, ul=upr),
   # compute log-degree logit fit
-  data.frame(deg=1:100) %>% mutate(stat=deg^fit1$coef, id='ldl', label='Log-degree logit', ll=deg^(fit1$coef - 1.96*fit1$se), ul=deg^(fit1$coef + 1.96*fit1$se))
+  data.frame(deg=1:100) %>% mutate(stat=deg^(fit1$coef), id='ldl', label='Log-degree logit', ll=deg^(fit1$coef - 1.96*fit1$se), ul=deg^(fit1$coef + 1.96*fit1$se))
   )
 
+# normalize by degree 1
 DF <- DF %>% filter(id %in% c('ldl', 'ls', 'npl')) %>% mutate(ref=1) %>%
   rbind(
     DF %>% filter(id %in% c('newman', 'newman2')) %>%
@@ -83,7 +90,7 @@ DF <- DF %>% filter(id %in% c('ldl', 'ls', 'npl')) %>% mutate(ref=1) %>%
   filter(id != 'newman2') %>%
   mutate(
     stat=stat/ref,
-    label=factor(label, levels=c('Newman','Individual degree logit','Least-squares','Log-degree logit'))
+    label=factor(label, levels=c('Newman','Non-parametric logit','Least-squares','Log-degree logit'))
   )
 
 ggplot(DF, aes(deg, stat, color=label)) +
@@ -264,36 +271,55 @@ ggsave('../results/fig_5_si2.pdf', p, width=9, height=3.5)
 ##
 ## Figure 6 - Non-parametric per model
 ##
-
-DFt <- rbind(
-    read_csv("~/projects/choosing_to_grow/choose2grow/results/fig6_flickr.csv", col_types='cddc') %>%
+DF <- rbind(
+    read_csv("~/projects/choosing_to_grow/choose2grow/results/fig6_flickr2.csv", col_types='ddcc') %>%
       mutate(Model=paste0('3.', model), data='Flickr'),
-    read_csv("~/projects/choosing_to_grow/choose2grow/results/fig6_citations.csv", col_types='cddc') %>%
+    read_csv("~/projects/choosing_to_grow/choose2grow/results/fig6_citations2.csv", col_types='ddcc') %>%
       mutate(Model=paste0('4.', model), data='Citations')
   ) %>%
-  mutate(data=factor(data, levels=c('Flickr','Citations')))
-
-DF <- DFt %>% filter(deg != 'alpha') %>% mutate(deg=as.numeric(deg)) %>%
-  filter(est < 9) %>%
-  mutate(est=exp(est)) %>%
-  group_by(Model) %>% mutate(est=est/min(est)) %>% ungroup()
-
-DF2 <- data.frame(deg='alpha', x=1:130) %>%
-  inner_join(DFt %>% filter(deg == 'alpha'), by='deg') %>%
-  mutate(est=x^est) %>%
-  arrange(Model, x) %>%
-  select(deg=x, est, data, Model)
-
-DF %>%
+  mutate(
+    deg=ifelse(deg==0, 0.5, deg),
+    data=factor(data, levels=c('Flickr','Citations'))
+  )
+  
+DF %>% filter(type=='point') %>%
   ggplot(aes(deg, est, color=Model)) + 
     geom_line(alpha=0) +
-    geom_abline(intercept=0, slope=1, color='black', linetype='dashed') +
     geom_point(shape=16, size=.7, show.legend=F) +
-    geom_line(data=DF2) +
-    scale_x_log10('Degree') +
-    scale_y_log10('Estimate') +
+    geom_line(data=DF %>% filter(type=='line')) +
+    scale_x_log10('Degree', breaks=c(0.5, 1, 10, 100), labels=c(0, 1, 10, 100)) +
+    scale_y_log10('Probability', labels=trans_format('log10', math_format(10^.x))) +
     facet_wrap(~data, scales='free_x') +
     scale_color_brewer(palette='Set1') +
-    #guides(colour=guide_legend(override.aes=list(alpha = 1))) +
     my_theme(11) -> p
 ggsave('../results/fig_6.pdf', p, width=6, height=3)
+
+
+
+
+## Si2
+DF <- rbind(
+    read_csv("~/projects/choosing_to_grow/choose2grow/results/fig6_flickr2.csv", col_types='ddcc') %>%
+      mutate(Model=paste0('3.', model), data='Flickr'),
+    read_csv("~/projects/choosing_to_grow/choose2grow/results/fig6_citations2.csv", col_types='ddcc') %>%
+      mutate(Model=paste0('4.', model), data='Citations')
+  )  %>%
+  filter(!(type=='line' & deg==0)) %>%
+  mutate(deg=ifelse(deg==0, 0.5, deg))
+
+DF <- DF %>%
+  inner_join(DF %>% filter(type=='line', deg==1) %>% select(Model, data, est1=est)) %>% mutate(est=est/est1) %>%
+  mutate(data=factor(data, levels=c('Flickr','Citations')))
+
+DF %>% filter(type=='point') %>%
+  ggplot(aes(deg, est, color=Model)) + 
+  geom_line(alpha=0) +
+  geom_line(data=data.frame(deg=1:100, est=1:100), color='black', linetype='dashed') +
+  geom_point(shape=16, size=.7, show.legend=F) +
+  geom_line(data=DF %>% filter(type=='line')) +
+  scale_x_log10('Degree', breaks=c(0.5, 1, 10, 100), labels=c(TeX("$0$"), TeX("$10^0$"), TeX("$10^1$"), TeX("$10^2$"))) +
+  scale_y_log10('Relative Probability', labels=trans_format('log10', math_format(10^.x))) +
+  facet_wrap(~data, scales='free_x') +
+  scale_color_brewer(palette='Set1') +
+  my_theme(11) -> p
+ggsave('../results/fig_6_si2.pdf', p, width=6, height=3)

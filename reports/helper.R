@@ -97,6 +97,9 @@ acc <- function(f, data) {
 }
 
 # version of log that returns 0 if input is 0
-safe_log <- Vectorize(function(x) {
-  if(x==0 | is.na(x)) 0 else log(x)
+censored_log <- Vectorize(function(x, min=NA, max=NA) {
+  if(is.na(x)) return(0)
+  if(!is.na(min) & x < min) return(0)
+  if(!is.na(max) & x > max) return(0)
+  return(log(x))
 })
