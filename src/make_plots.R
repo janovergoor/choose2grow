@@ -38,7 +38,7 @@ ggplot(DF, aes(x, y)) +
                      axis.line = element_blank(), panel.border = element_blank(),
                      panel.background = element_blank()) -> p
 
-ggsave('../results/fig_1.pdf', p, width=4.5, height=3)
+ggsave('../results/fig_1.pdf', p, width=4.5, height=2.5)
 
 
 
@@ -77,12 +77,12 @@ DF <- rbind(
   # Newman corrected
   DF %>% mutate(stat=stat*w) %>% select(deg,stat) %>% mutate(id='newman2', label='Newman\nCorrected', ll=0, ul=0),
   # non-parametric coefficients
-  DFnp %>% select(deg, stat) %>% mutate(id='npl', label='Non-parametric logit', ll=0, ul=0),
+  DFnp %>% select(deg, stat) %>% mutate(id='npl', label='Non-parametric\nlogit', ll=0, ul=0),
   # create predicted values of least squares fit
   predict(fit2, data.frame(deg=1:100), interval="confidence") %>% as.data.frame() %>% mutate(deg=1:100, id='ls', label='Least-squares') %>%
     select(deg, stat=fit, id, label, ll=lwr, ul=upr),
   # compute log-degree logit fit
-  data.frame(deg=1:100) %>% mutate(stat=deg^(fit1$coef), id='ldl', label='Log-degree logit', ll=deg^(fit1$coef - 1.96*fit1$se), ul=deg^(fit1$coef + 1.96*fit1$se))
+  data.frame(deg=1:100) %>% mutate(stat=deg^(fit1$coef), id='ldl', label='Log-degree\nlogit', ll=deg^(fit1$coef - 1.96*fit1$se), ul=deg^(fit1$coef + 1.96*fit1$se))
   )
 
 # normalize by degree 1
@@ -95,7 +95,7 @@ DF <- DF %>% filter(id %in% c('ldl', 'ls', 'npl')) %>% mutate(ref=1) %>%
   filter(id != 'newman2') %>%
   mutate(
     stat=stat/ref,
-    label=factor(label, levels=c('Newman','Non-parametric logit','Least-squares','Log-degree logit'))
+    label=factor(label, levels=c('Newman','Non-parametric\nlogit','Least-squares','Log-degree\nlogit'))
   )
 
 ggplot(DF, aes(deg, stat, color=label)) +
@@ -107,11 +107,11 @@ ggplot(DF, aes(deg, stat, color=label)) +
   scale_x_log10("log Degree", labels=trans_format('log10', math_format(10^.x)), breaks=c(10^0, 10^1, 10^2), expand=c(0,0)) +
   scale_y_log10("Relative likelihood", labels=trans_format('log10', math_format(10^.x)), expand=c(0,0)) +
   coord_cartesian(xlim=c(1, 100), ylim=c(1, 100)) +
-  scale_color_brewer(palette='Set1') + 
-  my_theme() + theme(legend.position=c(0.20, 0.79), legend.title=element_blank(),
+  scale_color_manual(values = c("#E69F00", "#56B4E9", "#009E73", "#CC79A7")) +
+  my_theme() + theme(legend.title=element_blank(),
                      axis.line = element_line(colour="black"), panel.border = element_blank(), panel.background = element_blank()) -> p
 
-ggsave('../results/fig_2.pdf', p, width=4, height=3)
+ggsave('../results/fig_2.pdf', p, width=4.5, height=2.5)
 
 
 ##
@@ -160,7 +160,7 @@ read_csv("../results/fig3_data.csv", col_types='ccccdddddddccd') %>%
   filter(type=='g', type2=='u') %>%
   ggplot(aes(x=r_off, y=mean_a, color=p)) + geom_line() +
     geom_segment(aes(x=r_off, xend=r_off, y=ll_a, yend=ul_a)) +
-    scale_color_brewer(palette='Set1') + 
+  scale_color_manual(values = c("#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00")) + 
     scale_x_continuous("r", breaks=seq(0, 1, 0.25), labels=c('0','0.25','0.50','0.75','1')) +
     scale_y_continuous(TeX("Estimate of $\\gamma$"), expand=c(0,0), limits=c(2, 5.1)) +
     geom_hline(yintercept=3, color='grey', linetype='dashed') +
@@ -213,16 +213,34 @@ pchisq(2 * abs(DF_max$ll[4]-DF_max$ll[3]), df=1, lower.tail=F)
 pchisq(2 * abs(DF_max$ll[2]-DF_max$ll[1]), df=1, lower.tail=F)
 
 
-DF %>%
-  ggplot(aes(p, ll, color=Model)) + geom_line() +
-  geom_point(data=DF_max, show.legend=F) +
-  facet_wrap(~data, scales='free_y') +
-  scale_x_continuous("Class probability", expand=c(0,0)) +
-  scale_y_continuous("Log-likelihood", limits=c(-45000,NA),
-                     labels=function(x) sprintf("%.0fk", x/1000)) +
-  my_theme() + theme(legend.position=c(0.90, 0.19), legend.title=element_blank()) -> p
 
-ggsave('../results/fig_4.pdf', p, width=4.5, height=2.5)
+p1 <- DF %>% filter(data=='r=0.50, p=1.00') %>%
+  ggplot(aes(p, ll, color=Model)) + geom_line() +
+  geom_point(data=DF_max %>% filter(data=='r=0.50, p=1.00'), show.legend=F) +
+  scale_x_continuous("Class probability", labels=c('0','0.25','0.50','0.75','1')) +
+  scale_y_continuous("Log-likelihood", limits=c(-40000,-25000), labels=function(x) sprintf("%.0fk", x/1000)) +
+  scale_color_manual(values = c("#E69F00", "#56B4E9")) +
+  ggtitle("r=0.50, p=1.00") +
+  my_theme() + theme(legend.position='none',                        
+                     axis.line = element_line(colour = "black"), panel.border=element_blank(), panel.background=element_blank())
+
+p2 <- DF %>% filter(data=='r=1.00, p=0.50') %>%
+  ggplot(aes(p, ll, color=Model)) + geom_line() +
+  geom_point(data=DF_max %>% filter(data=='r=1.00, p=0.50'), show.legend=F) +
+  scale_x_continuous("Class probability", labels=c('0','0.25','0.50','0.75','1')) +
+  scale_y_continuous("Log-likelihood", limits=c(-43000, -35000), labels=function(x) sprintf("%.0fk", x/1000)) +
+  scale_color_manual(values = c("#E69F00", "#56B4E9")) +
+  ggtitle("r=1.00, p=0.50") +
+  my_theme() + theme(legend.title=element_blank(), legend.position=c(0.85, 0.19), axis.title.y=element_blank(),
+                     axis.line = element_line(colour = "black"), panel.border=element_blank(), panel.background=element_blank())
+
+pdf('../results/fig_4.pdf', width=6, height=3)
+lay <- rbind(c(rep(1, 10), rep(2, 9)),
+             c(rep(1, 10), rep(2, 9)))
+grid.arrange(p1, p2, layout_matrix = lay)
+dev.off()
+
+
 
 
 ##
@@ -309,7 +327,7 @@ p1 <- DF %>% filter(type=='point', data=='Flickr') %>%
   scale_x_log10('Degree', breaks=c(0.5, 1, 10, 100), labels=c(TeX("$\\,0^{\\;}$"), TeX("$10^0$"), TeX("$10^1$"), TeX("$10^2$"))) +
   scale_y_log10('Relative Probability', labels=trans_format('log10', math_format(10^.x)), limits=c(0.2, 250)) +
   guides(colour=guide_legend(override.aes=list(alpha = 1))) +
-  scale_color_brewer(palette='Set1') +
+  scale_color_manual(values = c("#E69F00", "#56B4E9", "#009E73")) +
   ggtitle("Flickr") +
   my_theme(10) + theme(legend.position=c(0.89, 0.18), legend.title=element_blank(),
                        axis.line = element_line(colour = "black"), panel.border = element_blank(), panel.background = element_blank())
@@ -324,7 +342,7 @@ p2 <- DF %>% filter(type=='point', data=='Citations') %>%
   scale_x_log10('Degree', breaks=c(0.5, 1, 10, 100), labels=c(TeX("$\\,0^{\\;}$"), TeX("$10^0$"), TeX("$10^1$"), TeX("$10^2$"))) +
   scale_y_log10('Relative Probability', labels=trans_format('log10', math_format(10^.x)), limits=c(0.2, 250)) +
   guides(colour=guide_legend(override.aes=list(alpha = 1))) +
-  scale_color_brewer(palette='Set1') +
+  scale_color_manual(values = c("#E69F00", "#56B4E9")) +
   ggtitle("Citations") +
   my_theme(10) + theme(legend.position=c(0.89, 0.13), legend.title=element_blank(),
                        axis.title.y=element_blank(), axis.text.y=element_blank(),
