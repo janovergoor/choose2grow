@@ -98,7 +98,7 @@ DM <- read_csv(fn, col_types='iiiiii') %>%
 ```{r sample_data1}
 set.seed(100)
 # sort randomly
-examples <- DM %>% distinct(choice_id) %>% mutate(r=runif(22000)) %>% arrange(r)
+examples <- DM %>% distinct(choice_id) %>% mutate(r=runif(nrow(DM %>% distinct(choice_id)))) %>% arrange(r)
 
 H_train <- DM %>% inner_join(head(examples, 20000), by='choice_id') %>%
      group_by(choice_id) %>% mutate(alt_id=row_number()) %>% ungroup() %>%
@@ -132,7 +132,7 @@ fs <- list(
   mlogit(y ~ censored_log(deg, min=1) + has_deg + recip + is_fof | 0, H_train),
   mlogit(y ~ censored_log(deg, min=1) + has_deg + recip + hops_f | 0, H_train),
   # mlogit(y ~ censored_log(deg, min=1) + has_deg + recip + safe_log(hops) | 0, H_train2),
-  mlogit(y ~ censored_log(deg, min=1) + has_deg + recip + safe_log(n_paths) | 0, H_train)
+  mlogit(y ~ censored_log(deg, min=1) + has_deg + recip + censored_log(deg, min=1) | 0, H_train)
 )
 ```
 
@@ -164,19 +164,6 @@ f1 <- mlogit(y ~ as.factor(deg) + recip | 0, H_train3)
 f3 <- mlogit(y ~ as.factor(deg) + recip + is_fof | 0, H_train3)
 f4 <- mlogit(y ~ as.factor(deg) + recip + hops_f | 0, H_train3)
 
-DF <- rbind(
-  data.frame(deg=1:100  , est=coef(f1)[1:100] , se=coef(summary(f1))[1:100,2] , model='1'),
-  data.frame(deg='alpha', est=coef(fs[[2]])[1], se=coef(summary(fs[[2]]))[1,2], model='1'),
-  data.frame(deg=1:100  , est=coef(f3)[1:100] , se=coef(summary(f3))[1:100,2] , model='3'),
-  data.frame(deg='alpha', est=coef(fs[[4]])[1], se=coef(summary(fs[[4]]))[1,2], model='3'),
-  data.frame(deg=1:100  , est=coef(f4)[1:100] , se=coef(summary(f4))[1:100,2] , model='4'),
-  data.frame(deg='alpha', est=coef(fs[[5]])[1], se=coef(summary(fs[[5]]))[1,2], model='4')
-)
-
-write_csv(DF, "../results/fig6_flickr.csv")
-```
-
-```{r np_write2}
 D_test <- rbind(
     data.frame(choice_id=1, alt_id=0, y=0, deg=0, has_deg=0, recip=0, is_fof=0, hops=NA),
     data.frame(choice_id=1, alt_id=1:100, y=0, deg=1:100, has_deg=1, recip=0, is_fof=0, hops=NA)
@@ -187,7 +174,7 @@ D_test <- rbind(
   ) %>%
   mlogit.data(chid.var='choice_id', choice="y", alt.var='alt_id')
 
-DF2 <- rbind(
+DF <- rbind(
   data.frame(deg=0    , est=1/sum(exp(coef(f1)[1:100])), model='1', type='point'),
   data.frame(deg=1:100, est=exp(coef(f1)[1:100])/sum(exp(coef(f1)[1:100])), model='1', type='point'),
   data.frame(deg=0:100, est=predict(fs[[2]], D_test), model='1', type='line'),
@@ -199,7 +186,7 @@ DF2 <- rbind(
   data.frame(deg=0:100, est=predict(fs[[5]], D_test), model='4', type='line')
 )
 
-write_csv(DF2, "../results/fig6_flickr2.csv")
+write_csv(DF, "../results/fig6_flickr.csv")
 ```
 
 
@@ -249,7 +236,7 @@ fs <- list(
   mlogit(y ~ censored_log(deg, min=1) + has_deg + recip + is_fof | 0, H_train),
   mlogit(y ~ censored_log(deg, min=1) + has_deg + recip + hops_f | 0, H_train),
   # mlogit(y ~ censored_log(deg, min=1) + has_deg + recip + safe_log(hops) | 0, H_train2),
-  mlogit(y ~ censored_log(deg, min=1) + has_deg + recip + safe_log(n_paths) | 0, H_train)
+  mlogit(y ~ censored_log(deg, min=1) + has_deg + recip + censored_log(deg, min=1) | 0, H_train)
 )
 ```
 

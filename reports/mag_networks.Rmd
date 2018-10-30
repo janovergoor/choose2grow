@@ -319,19 +319,20 @@ make_data <- function(n, seed=NULL){
 ```{r actually_make_data, eval=F}
 # split generation up in parts to not use too much memory at once
 X <- make_data(n=100)
-while(nrow(distinct(X, choice_id)) < 10000) {
+while(nrow(distinct(X, choice_id)) < 12000) {
   message(nrow(distinct(X, choice_id)))
   Y <- make_data(n=1000)
   X <- rbind(X, Y[!(Y$choice_id %in% X$choice_id), ])  # join together
 }
 message(nrow(distinct(X, choice_id)))
-samples <- distinct(X, choice_id) %>% sample_n(10000) %>% .$choice_id
+samples <- distinct(X, choice_id) %>% sample_n(12000) %>% .$choice_id
 
 # convert to mlogit.data
 H_train <- X %>%
-  filter(choice_id %in% samples) %>%
+  filter(choice_id %in% head(samples, n=10000)) %>%
   mlogit.data(chid.var='choice_id', choice="y", alt.var='alt_id')
-H_test  <- make_data(n=1000, seed=953) %>%
+H_test  <- X %>%
+  filter(choice_id %in% tail(samples, n=2000)) %>%
   mlogit.data(chid.var='choice_id', choice="y", alt.var='alt_id')
 
 # store the data

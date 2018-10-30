@@ -386,17 +386,6 @@ H_train <- read.csv("../results/mag_cli_H_train.csv") %>%
 f1 <- mlogit(y ~ as.factor(n_citations_f) | 0, H_train)
 f3 <- mlogit(y ~ as.factor(n_citations_f) + has_same_author + log(delta_years) | 0, H_train)
 
-DF <- rbind(
-  data.frame(deg=1:100  , est=coef(f1)[1:100] , se=coef(summary(f1))[1:100,2] , model='1'),
-  data.frame(deg='alpha', est=coef(fs[[1]])[1], se=coef(summary(fs[[1]]))[1,2], model='1'),
-  data.frame(deg=1:100  , est=coef(f3)[1:100] , se=coef(summary(f3))[1:100,2] , model='3'),
-  data.frame(deg='alpha', est=coef(fs[[3]])[1], se=coef(summary(fs[[3]]))[1,2], model='3')
-)
-
-write_csv(DF, "../results/fig6_citations.csv")
-```
-
-```{r np_write2}
 D_test <- rbind(
     data.frame(choice_id=1, alt_id=0, y=0, n_citations=0, has_deg=0, has_same_author=0, delta_years=1),
     data.frame(choice_id=1, alt_id=1:100, y=0, n_citations=1:100, has_deg=1, has_same_author=0, delta_years=1)
@@ -412,5 +401,5 @@ DF <- rbind(
   data.frame(deg=0:100, est=predict(fs[[3]], D_test), model='3', type='line')
 )
 
-write_csv(DF, "../results/fig6_citations2.csv")
+write_csv(DF, "../results/fig6_citations.csv")
 ```

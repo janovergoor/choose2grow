@@ -9,6 +9,7 @@ library(tidyr)
 library(readr)
 library(scales)
 library(dplyr)
+library(gridExtra)
 
 setwd("~/projects/choosing_to_grow/choose2grow/src")
 source('../reports/helper.R')
@@ -33,9 +34,13 @@ ggplot(DF, aes(x, y)) +
   geom_point(data=data.frame(x=1, y=0.5), shape='x', size=4) +
   geom_point(data=em %>% head(n=1), shape=1 , size=3) +
   geom_point(data=em %>% tail(n=1), shape=16, size=3) +
-  my_theme() + theme(legend.position='none') -> p
+  my_theme() + theme(legend.position='none',
+                     axis.line = element_blank(), panel.border = element_blank(),
+                     panel.background = element_blank()) -> p
 
 ggsave('../results/fig_1.pdf', p, width=4.5, height=3)
+
+
 
 
 
@@ -103,7 +108,8 @@ ggplot(DF, aes(deg, stat, color=label)) +
   scale_y_log10("Relative likelihood", labels=trans_format('log10', math_format(10^.x)), expand=c(0,0)) +
   coord_cartesian(xlim=c(1, 100), ylim=c(1, 100)) +
   scale_color_brewer(palette='Set1') + 
-  my_theme() + theme(legend.position=c(0.20, 0.79), legend.title=element_blank()) -> p
+  my_theme() + theme(legend.position=c(0.20, 0.79), legend.title=element_blank(),
+                     axis.line = element_line(colour="black"), panel.border = element_blank(), panel.background = element_blank()) -> p
 
 ggsave('../results/fig_2.pdf', p, width=4, height=3)
 
@@ -132,7 +138,7 @@ DF <- list.files("../data/synth_graphs", pattern='[gd].*') %>%
     vals <- str_split(fn, '-')[[1]]
     data.frame(type=vals[1], r=vals[2], p=vals[3], type2=vals[4], id=substr(vals[5], 1, 2),
                alpha=fit$alpha, xmin=fit$xmin, r_est=r_est)
-  }, mc.cores=10) %>%
+  }, mc.cores=5) %>%
   bind_rows() %>%
   group_by(type, r, p, type2) %>%
   summarize(mean_a=mean(alpha), ll_a=quantile(alpha, 0.25), ul_a=quantile(alpha, 0.75),
@@ -148,16 +154,17 @@ DF <- list.files("../data/synth_graphs", pattern='[gd].*') %>%
     p_hat=ifelse(type2=='d', (mean_a-2)/(mean_a-1), (mean_a-3)/(mean_a-1))
   )
 
+write_csv(DF, "../results/fig3_data.csv")
 
-DF %>%
+read_csv("../results/fig3_data.csv", col_types='ccccdddddddccd') %>%
   filter(type=='g', type2=='u') %>%
   ggplot(aes(x=r_off, y=mean_a, color=p)) + geom_line() +
     geom_segment(aes(x=r_off, xend=r_off, y=ll_a, yend=ul_a)) +
     scale_color_brewer(palette='Set1') + 
     scale_x_continuous("r", breaks=seq(0, 1, 0.25), labels=c('0','0.25','0.50','0.75','1')) +
     scale_y_continuous(TeX("Estimate of $\\gamma$"), expand=c(0,0), limits=c(2, 5.1)) +
-    geom_hline(yintercept=3, color='lightgrey', linetype='dashed') +
-    my_theme(11) -> p
+    geom_hline(yintercept=3, color='grey', linetype='dashed') +
+    my_theme(11) + theme(axis.line = element_line(colour="black"), panel.border = element_blank(), panel.background = element_blank()) -> p
 ggsave('../results/fig_3.pdf', p, width=4.5, height=2.5)
 
 
@@ -198,9 +205,17 @@ ggsave('../results/fig_3_si3.pdf', p, width=4.5, height=3.5)
 DF <- read_csv("../results/fig4_data.csv", col_types='ccdd') %>%
   mutate(Model=ifelse(model=='p', 'Copy\nmodel', 'Local\nsearch'))
 
+DF_max <- DF %>% group_by(data, Model) %>% filter(ll==max(ll))
+
+pchisq(-2*log(DF_max$ll[4]/DF_max$ll[3]), df=1, lower.tail=F)
+pchisq(-2*log(DF_max$ll[1]/DF_max$ll[2]), df=1, lower.tail=F)
+pchisq(2 * abs(DF_max$ll[4]-DF_max$ll[3]), df=1, lower.tail=F)
+pchisq(2 * abs(DF_max$ll[2]-DF_max$ll[1]), df=1, lower.tail=F)
+
+
 DF %>%
   ggplot(aes(p, ll, color=Model)) + geom_line() +
-  geom_point(data=DF %>% group_by(data, Model) %>% filter(ll==max(ll)), show.legend=F) +
+  geom_point(data=DF_max, show.legend=F) +
   facet_wrap(~data, scales='free_y') +
   scale_x_continuous("Class probability", expand=c(0,0)) +
   scale_y_continuous("Log-likelihood", limits=c(-45000,NA),
@@ -272,36 +287,9 @@ ggsave('../results/fig_5_si2.pdf', p, width=9, height=3.5)
 ## Figure 6 - Non-parametric per model
 ##
 DF <- rbind(
-    read_csv("~/projects/choosing_to_grow/choose2grow/results/fig6_flickr2.csv", col_types='ddcc') %>%
+    read_csv("~/projects/choosing_to_grow/choose2grow/results/fig6_flickr.csv", col_types='ddcc') %>%
       mutate(Model=paste0('3.', model), data='Flickr'),
-    read_csv("~/projects/choosing_to_grow/choose2grow/results/fig6_citations2.csv", col_types='ddcc') %>%
-      mutate(Model=paste0('4.', model), data='Citations')
-  ) %>%
-  mutate(
-    deg=ifelse(deg==0, 0.5, deg),
-    data=factor(data, levels=c('Flickr','Citations'))
-  )
-  
-DF %>% filter(type=='point') %>%
-  ggplot(aes(deg, est, color=Model)) + 
-    geom_line(alpha=0) +
-    geom_point(shape=16, size=.7, show.legend=F) +
-    geom_line(data=DF %>% filter(type=='line')) +
-    scale_x_log10('Degree', breaks=c(0.5, 1, 10, 100), labels=c(0, 1, 10, 100)) +
-    scale_y_log10('Probability', labels=trans_format('log10', math_format(10^.x))) +
-    facet_wrap(~data, scales='free_x') +
-    scale_color_brewer(palette='Set1') +
-    my_theme(11) -> p
-ggsave('../results/fig_6.pdf', p, width=6, height=3)
-
-
-
-
-## Si2
-DF <- rbind(
-    read_csv("~/projects/choosing_to_grow/choose2grow/results/fig6_flickr2.csv", col_types='ddcc') %>%
-      mutate(Model=paste0('3.', model), data='Flickr'),
-    read_csv("~/projects/choosing_to_grow/choose2grow/results/fig6_citations2.csv", col_types='ddcc') %>%
+    read_csv("~/projects/choosing_to_grow/choose2grow/results/fig6_citations.csv", col_types='ddcc') %>%
       mutate(Model=paste0('4.', model), data='Citations')
   )  %>%
   filter(!(type=='line' & deg==0)) %>%
@@ -311,15 +299,39 @@ DF <- DF %>%
   inner_join(DF %>% filter(type=='line', deg==1) %>% select(Model, data, est1=est)) %>% mutate(est=est/est1) %>%
   mutate(data=factor(data, levels=c('Flickr','Citations')))
 
-DF %>% filter(type=='point') %>%
+p1 <- DF %>% filter(type=='point', data=='Flickr') %>%
   ggplot(aes(deg, est, color=Model)) + 
   geom_line(alpha=0) +
   geom_line(data=data.frame(deg=1:100, est=1:100), color='black', linetype='dashed') +
-  geom_point(shape=16, size=.7, show.legend=F) +
-  geom_line(data=DF %>% filter(type=='line')) +
-  scale_x_log10('Degree', breaks=c(0.5, 1, 10, 100), labels=c(TeX("$0$"), TeX("$10^0$"), TeX("$10^1$"), TeX("$10^2$"))) +
-  scale_y_log10('Relative Probability', labels=trans_format('log10', math_format(10^.x))) +
-  facet_wrap(~data, scales='free_x') +
+  geom_point(shape=16, size=.8, show.legend=F) +
+  geom_point(data=DF %>% filter(type=='point', deg==0.5, data=='Flickr'), shape=16, size=1.2, show.legend=F) +
+  geom_line(data=DF %>% filter(type=='line', data=='Flickr'), alpha=0.6) +
+  scale_x_log10('Degree', breaks=c(0.5, 1, 10, 100), labels=c(TeX("$\\,0^{\\;}$"), TeX("$10^0$"), TeX("$10^1$"), TeX("$10^2$"))) +
+  scale_y_log10('Relative Probability', labels=trans_format('log10', math_format(10^.x)), limits=c(0.2, 250)) +
+  guides(colour=guide_legend(override.aes=list(alpha = 1))) +
   scale_color_brewer(palette='Set1') +
-  my_theme(11) -> p
-ggsave('../results/fig_6_si2.pdf', p, width=6, height=3)
+  ggtitle("Flickr") +
+  my_theme(10) + theme(legend.position=c(0.89, 0.18), legend.title=element_blank(),
+                       axis.line = element_line(colour = "black"), panel.border = element_blank(), panel.background = element_blank())
+
+p2 <- DF %>% filter(type=='point', data=='Citations') %>%
+  ggplot(aes(deg, est, color=Model)) + 
+  geom_line(alpha=0) +
+  geom_line(data=data.frame(deg=1:100, est=1:100), color='black', linetype='dashed') +
+  geom_point(shape=16, size=.8, show.legend=F) +
+  geom_point(data=DF %>% filter(type=='point', deg==0.5, data=='Citations'), shape=16, size=1.2, show.legend=F) +
+  geom_line(data=DF %>% filter(type=='line', data=='Citations'), alpha=0.6) +
+  scale_x_log10('Degree', breaks=c(0.5, 1, 10, 100), labels=c(TeX("$\\,0^{\\;}$"), TeX("$10^0$"), TeX("$10^1$"), TeX("$10^2$"))) +
+  scale_y_log10('Relative Probability', labels=trans_format('log10', math_format(10^.x)), limits=c(0.2, 250)) +
+  guides(colour=guide_legend(override.aes=list(alpha = 1))) +
+  scale_color_brewer(palette='Set1') +
+  ggtitle("Citations") +
+  my_theme(10) + theme(legend.position=c(0.89, 0.13), legend.title=element_blank(),
+                       axis.title.y=element_blank(), axis.text.y=element_blank(),
+                       axis.line = element_line(colour = "black"), panel.border = element_blank(), panel.background = element_blank()) -> p2
+
+pdf('../results/fig_6.pdf', width=6, height=3)
+lay <- rbind(c(rep(1, 10), rep(2, 9)),
+             c(rep(1, 10), rep(2, 9)))
+grid.arrange(p1, p2, layout_matrix = lay)
+dev.off()

@@ -47,15 +47,15 @@ if os.path.exists(fn_out):
 DF = pd.read_csv(fn_in, compression='gzip', header=0, sep='\t',
                  names=['from', 'to', 'ds'])
 el_pre = DF[DF.ds < start_date]
-el_pre = list(zip(el_pre['from'], el_pre['to']))
+el_pre = list(zip(el_pre['from'], el_pre['to'], el_pre['ds']))
 el_post = DF[DF.ds >= start_date]
-el_post = list(zip(el_post['from'], el_post['to']))
+el_post = list(zip(el_post['from'], el_post['to'], el_post['ds']))
 print("Read %d pre rows and %d post rows from %s" %
       (len(el_pre), len(el_post), fn_in))
 
 # create starting graph
 G = nx.DiGraph()
-G.add_edges_from(el_pre)
+G.add_edges_from([(x[0], x[1]) for x in el_pre])
 print("Starting graph has %d nodes" % len(G))
 
 # open the output file
@@ -68,13 +68,6 @@ tmp = writer.writerow(['choice_id', 'y', 'deg', 'hops', 'recip', 'n_paths'])
 def do_edge(i, j, n):
     # get negative samples (few too many)
     js = random.sample(G.nodes, n_alt + 10)
-    # WIP optimization
-    # X = G.nodes.keys()
-    # idx = list((np.random.rand(n_alt + 10) * len(X)).astype(int))
-    # js = [X[x] for x in idx]
-    # make sure i, j are actually in the graph
-    G.add_node(i)
-    G.add_node(j)
     # make sure they're not already chosen
     succs = set(G.successors(i))
     js = [j] + list(set(js) - succs)[:n_alt]
@@ -82,11 +75,12 @@ def do_edge(i, j, n):
     for new_j in js:
         # compute features
         y = 1 if new_j == j else 0
+        # process new node separately
+        if new_j not in G:
+            tmp = writer.writerow([n, y, 0, 'NA', 0, 0])
+            return None
         try:
             deg = G.in_degree(new_j)
-            # sometimes this fails with
-            # NetworkXError: nbunch is not a node or a sequence of nodes
-            # TypeError: 'numpy.int64' object is not iterable
         except Exception as e:
             print("[ERROR] in (%s,%s) new_j=%s" % (i, j, new_j))
             print(e)
@@ -111,16 +105,25 @@ def do_edge(i, j, n):
 # subset rest of the edges
 print("Getting %d choice sets" % n_sample)
 idx = 0
+last_ds = ''
+edges = []
 # go until you have enough
 while idx < n_sample:
-    (i, j) = el_post.pop(0)
-    # only process it if sampled
-    if random.random() < p:
+    (i, j, ds) = el_post.pop(0)
+    # update the graph when we get to a new day
+    if last_ds != ds:
+        print("New day %s, added %d new edges" % (ds, len(edges)))
+        G.add_edges_from(edges)
+        nodes = set(G.nodes())
+        edges = []
+        last_ds = ds
+    # only process if sampled and i is not new
+    if random.random() < p and i in nodes:
         print("Doing edge %d/%d: (%s,%s)" % (idx + 1, n_sample, i, j))
         do_edge(i, j, idx)
         idx += 1
     # actually add the edge
-    G.add_edge(i, j)
+    edges.append((i, j))
 
 f_out.close()
 print("Wrote %d choice sets to %s" % (idx, fn_out))
