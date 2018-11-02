@@ -100,16 +100,18 @@ DF <- DF %>% filter(id %in% c('ldl', 'ls', 'npl')) %>% mutate(ref=1) %>%
 
 ggplot(DF, aes(deg, stat, color=label)) +
   geom_point(shape=20, alpha=0.0) +
-  geom_line(data=DF %>% filter(id=='ls'), show.legend=F, size=0.5) +
-  geom_line(data=DF %>% filter(id=='ldl'), show.legend=F, size=0.5) +
+  geom_line(data=DF %>% filter(id=='ls'), size=0.5) +
+  geom_line(data=DF %>% filter(id=='ldl'), size=0.5) +
   geom_point(data=DF %>% filter(id=='newman'), shape=20, alpha=0.7) +
   geom_point(data=DF %>% filter(id=='npl'), shape=20, alpha=0.7) +
   scale_x_log10("log Degree", labels=trans_format('log10', math_format(10^.x)), breaks=c(10^0, 10^1, 10^2), expand=c(0,0)) +
   scale_y_log10("Relative likelihood", labels=trans_format('log10', math_format(10^.x)), expand=c(0,0)) +
   coord_cartesian(xlim=c(1, 100), ylim=c(1, 100)) +
-  scale_color_manual(values = c("#E69F00", "#56B4E9", "#009E73", "#CC79A7")) +
-  my_theme() + theme(legend.title=element_blank(),
-                     axis.line = element_line(colour="black"), panel.border = element_blank(), panel.background = element_blank()) -> p
+  scale_color_manual(values = c("#E69F00", "#56B4E9", "#009E73", "#CC79A7"),
+                     guide = guide_legend(override.aes=list(
+                       linetype=c("blank", "blank", "solid", "solid"), shape=c(16, 16, NA, NA)))) +
+    my_theme() + theme(legend.title=element_blank(),
+                     axis.line = element_line(colour="black"), panel.border=element_blank(), panel.background=element_blank()) -> p
 
 ggsave('../results/fig_2.pdf', p, width=4.5, height=2.5)
 
@@ -158,13 +160,14 @@ write_csv(DF, "../results/fig3_data.csv")
 
 read_csv("../results/fig3_data.csv", col_types='ccccdddddddccd') %>%
   filter(type=='g', type2=='u') %>%
-  ggplot(aes(x=r_off, y=mean_a, color=p)) + geom_line() +
-    geom_segment(aes(x=r_off, xend=r_off, y=ll_a, yend=ul_a)) +
-  scale_color_manual(values = c("#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00")) + 
+  ggplot(aes(x=r_off, y=mean_a, color=p)) + geom_line() + geom_point(show.legend=F) +
+    #geom_segment(aes(x=r_off, xend=r_off, y=ll_a, yend=ul_a)) +
+    scale_color_manual(values = c("#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00")) + 
     scale_x_continuous("r", breaks=seq(0, 1, 0.25), labels=c('0','0.25','0.50','0.75','1')) +
     scale_y_continuous(TeX("Estimate of $\\gamma$"), expand=c(0,0), limits=c(2, 5.1)) +
     geom_hline(yintercept=3, color='grey', linetype='dashed') +
-    my_theme(11) + theme(axis.line = element_line(colour="black"), panel.border = element_blank(), panel.background = element_blank()) -> p
+    my_theme(11) + theme(legend.title=element_text(hjust=0.5),
+      axis.line=element_line(colour="black"), panel.border=element_blank(), panel.background=element_blank()) -> p
 ggsave('../results/fig_3.pdf', p, width=4.5, height=2.5)
 
 
