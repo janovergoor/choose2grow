@@ -13,9 +13,9 @@ from util import *
   * /edges - relevant network context features for every edge
   * /choices - for every edge, sampled choice set data (degree, # fof)
 
-  input : data_path/synth_graphs/
-  output: data_path/edges/
-          data_path/choices/
+  input : ../data/synth_graphs/
+  output: ../data/edges/
+          ../data/choices/
 
 """
 

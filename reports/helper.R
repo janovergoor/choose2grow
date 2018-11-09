@@ -1,22 +1,30 @@
 suppressPackageStartupMessages(library(ggplot2))
+
+library(ggplot2)
+library(latex2exp)
 library(mlogit)
-library(scales)
 library(stringr)
+library(parallel)
 library(tidyr)
-library(dplyr)
 library(readr)
+library(scales)
+library(dplyr)
+library(gridExtra)
+
 
 # cleaner theme
-my_theme <- function(base_size=10) {
+my_theme <- function(base_size=11) {
   # Set the base size
   theme_bw(base_size=base_size) +
     theme(
       # Center title
-      plot.title = element_text(hjust = 0.5),
-      # Make the background white
-      panel.background=element_rect(fill='white', colour='white'),
+      plot.title = element_text(hjust=0.5),
+      # Make the background white, with open top-right
       panel.grid.major=element_blank(),
       panel.grid.minor=element_blank(),
+      axis.line=element_line(colour="black"),
+      panel.border=element_blank(),
+      panel.background=element_blank(),
       # Minimize margins
       plot.margin=unit(c(0.2, 0.2, 0.2, 0.2), "cm"),
       panel.spacing=unit(0.25, "lines"),
@@ -24,6 +32,7 @@ my_theme <- function(base_size=10) {
       axis.title.x=element_text(margin=ggplot2::margin(t=6.0)),
       axis.title.y=element_text(margin=ggplot2::margin(r=6.0)),
       # Simplify the legend
+      legend.title=element_blank(),
       legend.key=element_blank(),
       legend.background=element_rect(fill='transparent')
     )

@@ -1,15 +1,23 @@
 import json
 import csv
 import os
-from util import data_path
+import util
 
 """
 
-  Script to process data for analysis in section 5.3 of the paper.
-  Make sure the data has been downloaded first.
+  Script to process the Microsoft Academic Graph data for analysis in section 4.4 of the paper.
+  The data is should be downloaded first, with the following bash code:
+
+    mkdir ~/mag_raw
+    cd mag_raw
+    for i in {0..8}
+    do
+       wget -4 https://academicgraphv1wu.blob.core.windows.net/aminer/mag_papers_$i.zip
+       unzip mag_papers_$i.zip
+    done
 
   input : ~/mag_raw
-  output: data_path/mag-*.csv
+  output: ../data/mag-*.csv
 
 """
 
@@ -29,7 +37,7 @@ topics = {
 
 # create file handles
 for k, v in topics.items():
-    f_out = open('%s/mag_%s.txt' % (data_path, k), 'w')
+    f_out = open('%s/mag_%s.txt' % (util.data_path, k), 'w')
     writer = csv.writer(f_out, dialect='unix', quoting=csv.QUOTE_NONNUMERIC)
     topics[k]['file'] = f_out
     topics[k]['writer'] = writer

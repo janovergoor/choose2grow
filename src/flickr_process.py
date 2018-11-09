@@ -7,14 +7,14 @@ from datetime import datetime
 
 """
 
-  Script to process data for analysis in section 5.2 of the paper.
+  Script to process data for analysis in section 4.3 of the paper.
   It converts the raw "flickr growth" edges to choice data.
-  Data is downloadable at:
+  The data should be downloaded first with:
 
-    http://socialnetworks.mpi-sws.mpg.de/data/flickr-growth.txt.gz
+    wget -4 http://socialnetworks.mpi-sws.mpg.de/data/flickr-growth.txt.gz ../data/
 
-  input : data_path/flickr-growth.txt.gz
-  output: data_path/flickr-growth_choices.csv
+  input : ../data/flickr-growth.txt.gz
+  output: ../data/flickr-growth_choices.csv
 
 """
 

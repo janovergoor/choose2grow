@@ -6,22 +6,19 @@ from util import *
 
   Driver script #1 - Generate synthetic graphs
 
-  This script generates (for each combination (r,p),
-  a number of graphs, and writes them out as ordered edge lists.
+  This script generates, for each combination of (r,p), 10 synthetic graphs
+  and writes them out as ordered edge lists.
   The structure of the filename is:
 
       "%s-%.2f-%.2f-%s-%.02d.csv" % ({d,g}, r, p, {u,d}, id)
 
-  Each id is generated from the *same* seed graph.
-
-  output: data_path/synth_graphs
+  output: ../data/synth_graphs
 
 """
 
 # make sure the output folder exists
 mkdir(data_path + '/synth_graphs')
 
-#@profile
 def make_rp_graph(id, G_in=None, n_max=10000, r=0.5, p=0.5, grow=True, m=1, directed=False):
     """
     Generate a graph with n_max edges according to the (r,p)-model, which
