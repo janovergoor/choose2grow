@@ -40,16 +40,17 @@ author_published <- d_raw %>%
   filter(year > 1950)
 ```
 
-* total number of papers after 1950 (=nodes): `r nrow(d_raw %>% filter(year>150))`
-* total number of references: `r nrow(edges %>% filter(!is.na(cites), year_cited > 150))`
-* total number of references to known nodes (=edges): `r nrow(edges %>% filter(!is.na(year_published), year_cited > 150))`
-* share of references to known nodes: `r edges %>% filter(!is.na(cites), year_cited > 150) %>% summarize(mean(!is.na(year_published))) %>% as.numeric()`
-* total number of papers with at least one out-link: `r nrow(edges %>% filter(!is.na(cites), year_cited > 150) %>% distinct(id))`
+* total number of papers after 1950 (=nodes): `r nrow(d_raw %>% filter(year>1950))`
+* total number of papers after 2009 (=nodes): `r nrow(d_raw %>% filter(year>2009))`
+* total number of references: `r nrow(edges %>% filter(!is.na(cites), year_cited > 1950))`
+* total number of references to known nodes (=edges): `r nrow(edges %>% filter(!is.na(year_published), year_cited > 1950))`
+* share of references to known nodes: `r edges %>% filter(!is.na(cites), year_cited > 1950) %>% summarize(mean(!is.na(year_published))) %>% as.numeric()`
+* total number of papers with at least one out-link: `r nrow(edges %>% filter(!is.na(cites), year_cited > 1950) %>% distinct(id))`
 
 ```{r plot_dist_time}
 Rmisc::multiplot(
   # distribution of when papers are published
-  d_raw %>% filter(year > 150) %>%
+  d_raw %>% filter(year > 1950) %>%
     group_by(year) %>% summarize(n=n()) %>%
     ggplot(aes(year, n)) + geom_line() +
       scale_x_continuous("Year", limits=c(1950,2020)) +
@@ -96,8 +97,6 @@ Rmisc::multiplot(
     ggplot(aes(n_citation, stat)) + geom_line() +
       scale_x_log10("(log) # citations (stated)", limits=c(40, 8000)) +
       scale_y_continuous("Share of citations observed") +
-      #scale_y_log10("# citations (observed)") +
-      #geom_line(data=data.frame(x=10:10000), aes(x, x), color='blue') + 
       ggtitle("Citations - Stated vs Observed") +
       my_theme(),
   cols=2
@@ -143,7 +142,7 @@ deg_out <- edges %>%
   ungroup()
 ```
 
-Out-degree over time (global average is `r deg_out %>% filter(year_cited > 150) %>% ungroup() %>% summarize(mean(n_out)) %>% as.numeric() %>% round(2)`):
+Out-degree over time (global average is `r deg_out %>% filter(year_cited > 1950) %>% ungroup() %>% summarize(mean(n_out)) %>% as.numeric() %>% round(2)`):
 
 ```{r plot_out_degree, fig.width=4.8, fig.height=2}
 degs <- deg_out %>% group_by(year_cited) %>% summarize(n_out=mean(n_out))
@@ -170,7 +169,7 @@ Rmisc::multiplot(
     filter(year_published > 1950) %>%
     group_by(cites, year_published) %>% summarize(n=n()) %>%
     group_by(year_published) %>% summarize(n_citation=mean(n, na.rm=T)) %>%
-    ggplot(aes(year_published, n_citation)) + geom_point() + #geom_line() +
+    ggplot(aes(year_published, n_citation)) + geom_point() +
       scale_y_continuous("Avg # citations") +
       scale_x_continuous("Year published") +
       ggtitle("Citations by Age (observed)") +
@@ -179,7 +178,7 @@ Rmisc::multiplot(
   d_raw %>%
     filter(year > 1950) %>%
     group_by(year) %>% summarize(n_citation=mean(n_citation, na.rm=T)) %>%
-    ggplot(aes(year, n_citation)) + geom_point() + #geom_line() +
+    ggplot(aes(year, n_citation)) + geom_point() +
       scale_y_continuous("Avg # citations") +
       scale_x_continuous("Year published") +
       ggtitle("Citations by Age (stated)") +
@@ -227,7 +226,7 @@ d_raw %>% select(keywords) %>%
 ## Model
 Data construction process:
 
-* sample 10000 citations from after 2011
+* sample 20000 citations from 2010 or later
 * for each actual citation, sample 24 non-cited papers (from before publication date)
 * for each of the (paper,option) pairs, compute features (n citations, years since, has same author)
 
@@ -242,7 +241,7 @@ make_data <- function(n, seed=NULL){
     ## sample actual choices
     dm1 <- edges %>%
       # only look at citations within dataset
-      filter(!is.na(year_published), year_published < year_cited, year_cited > 2011) %>%
+      filter(!is.na(year_published), year_published < year_cited, year_cited >= 2010) %>%
       sample_n(n) %>%
       mutate(y=1) %>%
       select(paper_id=id, paper_year=year_cited, option_id=cites, option_year=year_published, y)
@@ -316,20 +315,20 @@ make_data <- function(n, seed=NULL){
 }
 ```
 
-```{r actually_make_data, eval=F}
+```{r actually_make_data, eval=T}
 # split generation up in parts to not use too much memory at once
 X <- make_data(n=100)
-while(nrow(distinct(X, choice_id)) < 12000) {
+while(nrow(distinct(X, choice_id)) < 22000) {
   message(nrow(distinct(X, choice_id)))
   Y <- make_data(n=1000)
   X <- rbind(X, Y[!(Y$choice_id %in% X$choice_id), ])  # join together
 }
 message(nrow(distinct(X, choice_id)))
-samples <- distinct(X, choice_id) %>% sample_n(12000) %>% .$choice_id
+samples <- distinct(X, choice_id) %>% sample_n(22000) %>% .$choice_id
 
 # convert to mlogit.data
 H_train <- X %>%
-  filter(choice_id %in% head(samples, n=10000)) %>%
+  filter(choice_id %in% head(samples, n=20000)) %>%
   mlogit.data(chid.var='choice_id', choice="y", alt.var='alt_id')
 H_test  <- X %>%
   filter(choice_id %in% tail(samples, n=2000)) %>%
@@ -353,12 +352,12 @@ H_test  <- read.csv("../results/mag_net_H_test.csv") %>%
 
 ```{r model_models}
 fs <- list(
-  mlogit(y ~ safe_log(n_citations) + has_deg | 0, H_train),
-  mlogit(y ~ safe_log(n_citations) + has_deg + has_same_author | 0, H_train),
-  mlogit(y ~ safe_log(n_citations) + has_deg + has_same_author + log(delta_years) | 0, H_train),
-  mlogit(y ~ safe_log(n_citations) + has_deg + has_same_author + log(delta_years)  + safe_log(max_n_papers) | 0, H_train),
-  mlogit(y ~ safe_log(n_citations) + has_deg + has_same_author + log(delta_years)  + safe_log(max_n_papers) + n_same_keywords|  0, H_train),
-  mlogit(y ~ safe_log(n_citations) + has_deg + has_same_author + is_old*safe_log(n_citations) | 0, H_train)
+  mlogit(y ~ censored_log(n_citations, min=1) + has_deg | 0, H_train),
+  mlogit(y ~ censored_log(n_citations, min=1) + has_deg + has_same_author | 0, H_train),
+  mlogit(y ~ censored_log(n_citations, min=1) + has_deg + has_same_author + log(delta_years) | 0, H_train),
+  mlogit(y ~ censored_log(n_citations, min=1) + has_deg + has_same_author + log(delta_years)  + censored_log(max_n_papers, min=1) | 0, H_train),
+  mlogit(y ~ censored_log(n_citations, min=1) + has_deg + has_same_author + log(delta_years)  + censored_log(max_n_papers, min=1) + n_same_keywords|  0, H_train),
+  mlogit(y ~ censored_log(n_citations, min=1) + has_deg + has_same_author + is_old*censored_log(n_citations, min=1) | 0, H_train)
 )
 ```
 
@@ -366,7 +365,7 @@ fs <- list(
 stargazer::stargazer(
   fs,
   dep.var.caption = "",
-  covariate.labels = c("log Citations", "Has degree", "Has same author", "log Age", "Max papers by author", "# same keywords", "+10 years", "+10 years*log Citations"),
+  covariate.labels = c("log Citations", "Has degree", "Has same author", "log Age", "Max papers by author", "# same keywords", ">10 years", ">10 years*log Citations"),
   header=FALSE,
   type='text')
 ```

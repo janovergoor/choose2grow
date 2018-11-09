@@ -103,3 +103,8 @@ censored_log <- Vectorize(function(x, min=NA, max=NA) {
   if(!is.na(max) & x > max) return(0)
   return(log(x))
 })
+
+# likelihood-ratio test
+lrt <- function(ll0, ll1, df=1) {
+  pchisq(2*abs(ll1-ll0), df=df, lower.tail=F)
+}

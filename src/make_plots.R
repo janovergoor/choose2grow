@@ -31,10 +31,10 @@ ggplot(DF, aes(x, y)) +
   geom_line(data=em, color='black') +
   scale_x_continuous(TeX("$\\alpha$"), limits=c(0, 2), expand=c(0,0)) +
   scale_y_continuous(TeX("$\\pi_1$"), limits=c(0, 1), expand=c(0,0)) +
-  geom_point(data=data.frame(x=1, y=0.5), shape='x', size=4) +
   geom_point(data=em %>% head(n=1), shape=1 , size=3) +
   geom_point(data=em %>% tail(n=1), shape=16, size=3) +
-  my_theme() + theme(legend.position='none',
+  geom_point(data=data.frame(x=1, y=0.5), shape='x', size=4, color='red') +
+  my_theme(11) + theme(legend.position='none',
                      axis.line = element_blank(), panel.border = element_blank(),
                      panel.background = element_blank()) -> p
 
@@ -110,7 +110,7 @@ ggplot(DF, aes(deg, stat, color=label)) +
   scale_color_manual(values = c("#E69F00", "#56B4E9", "#009E73", "#CC79A7"),
                      guide = guide_legend(override.aes=list(
                        linetype=c("blank", "blank", "solid", "solid"), shape=c(16, 16, NA, NA)))) +
-    my_theme() + theme(legend.title=element_blank(),
+    my_theme(11) + theme(legend.title=element_blank(),
                      axis.line = element_line(colour="black"), panel.border=element_blank(), panel.background=element_blank()) -> p
 
 ggsave('../results/fig_2.pdf', p, width=4.5, height=2.5)
@@ -206,35 +206,32 @@ ggsave('../results/fig_3_si3.pdf', p, width=4.5, height=3.5)
 ##
 
 DF <- read_csv("../results/fig4_data.csv", col_types='ccdd') %>%
-  mutate(Model=ifelse(model=='p', 'Copy\nmodel', 'Local\nsearch'))
+  mutate(Model=ifelse(model=='p', 'Copy\nmodel', ifelse(model=='r', 'Local\nsearch', '2d')))
 
 DF_max <- DF %>% group_by(data, Model) %>% filter(ll==max(ll))
 
-pchisq(-2*log(DF_max$ll[4]/DF_max$ll[3]), df=1, lower.tail=F)
-pchisq(-2*log(DF_max$ll[1]/DF_max$ll[2]), df=1, lower.tail=F)
-pchisq(2 * abs(DF_max$ll[4]-DF_max$ll[3]), df=1, lower.tail=F)
-pchisq(2 * abs(DF_max$ll[2]-DF_max$ll[1]), df=1, lower.tail=F)
-
-
+lrt(DF_max$ll[4], DF_max$ll[3])
+lrt(DF_max$ll[2], DF_max$ll[1])
 
 p1 <- DF %>% filter(data=='r=0.50, p=1.00') %>%
   ggplot(aes(p, ll, color=Model)) + geom_line() +
   geom_point(data=DF_max %>% filter(data=='r=0.50, p=1.00'), show.legend=F) +
-  scale_x_continuous("Class probability", labels=c('0','0.25','0.50','0.75','1')) +
-  scale_y_continuous("Log-likelihood", limits=c(-40000,-25000), labels=function(x) sprintf("%.0fk", x/1000)) +
+  scale_x_continuous(TeX("Class probability ($\\textit{p}$ or $\\textit{r}$)"), labels=c('0','0.25','0.50','0.75','1')) +
+  scale_y_continuous("Log-likelihood", limits=c(-43000,-25000), labels=function(x) sprintf("%.0fk", x/1000)) +
   scale_color_manual(values = c("#E69F00", "#56B4E9")) +
-  ggtitle("r=0.50, p=1.00") +
-  my_theme() + theme(legend.position='none',                        
+  ggtitle(TeX("$\\textit{r}\ =\ 0.50\\;\\;\\textit{p}\ =\ 1.00$")) +
+  my_theme(11) + theme(legend.position='none',                        
                      axis.line = element_line(colour = "black"), panel.border=element_blank(), panel.background=element_blank())
 
 p2 <- DF %>% filter(data=='r=1.00, p=0.50') %>%
   ggplot(aes(p, ll, color=Model)) + geom_line() +
   geom_point(data=DF_max %>% filter(data=='r=1.00, p=0.50'), show.legend=F) +
-  scale_x_continuous("Class probability", labels=c('0','0.25','0.50','0.75','1')) +
-  scale_y_continuous("Log-likelihood", limits=c(-43000, -35000), labels=function(x) sprintf("%.0fk", x/1000)) +
+  scale_x_continuous(TeX("Class probability ($\\textit{p}$ or $\\textit{r}$)"), labels=c('0','0.25','0.50','0.75','1')) +
+  scale_y_continuous("Log-likelihood", limits=c(-43000, -25000), labels=function(x) sprintf("%.0fk", x/1000)) +
   scale_color_manual(values = c("#E69F00", "#56B4E9")) +
-  ggtitle("r=1.00, p=0.50") +
-  my_theme() + theme(legend.title=element_blank(), legend.position=c(0.85, 0.19), axis.title.y=element_blank(),
+  ggtitle(TeX("$\\textit{r}\ =\ 1.00\\;\\;\\textit{p}\ =\ 0.50$")) +
+  my_theme(11) + theme(legend.title=element_blank(), legend.position=c(0.85, 0.85),
+                       axis.title.y=element_blank(), axis.text.y=element_blank(),
                      axis.line = element_line(colour = "black"), panel.border=element_blank(), panel.background=element_blank())
 
 pdf('../results/fig_4.pdf', width=6, height=3)
@@ -332,7 +329,7 @@ p1 <- DF %>% filter(type=='point', data=='Flickr') %>%
   guides(colour=guide_legend(override.aes=list(alpha = 1))) +
   scale_color_manual(values = c("#E69F00", "#56B4E9", "#009E73")) +
   ggtitle("Flickr") +
-  my_theme(10) + theme(legend.position=c(0.89, 0.18), legend.title=element_blank(),
+  my_theme(11) + theme(legend.position=c(0.89, 0.18), legend.title=element_blank(),
                        axis.line = element_line(colour = "black"), panel.border = element_blank(), panel.background = element_blank())
 
 p2 <- DF %>% filter(type=='point', data=='Citations') %>%
@@ -347,7 +344,7 @@ p2 <- DF %>% filter(type=='point', data=='Citations') %>%
   guides(colour=guide_legend(override.aes=list(alpha = 1))) +
   scale_color_manual(values = c("#E69F00", "#56B4E9")) +
   ggtitle("Citations") +
-  my_theme(10) + theme(legend.position=c(0.89, 0.13), legend.title=element_blank(),
+  my_theme(11) + theme(legend.position=c(0.89, 0.13), legend.title=element_blank(),
                        axis.title.y=element_blank(), axis.text.y=element_blank(),
                        axis.line = element_line(colour = "black"), panel.border = element_blank(), panel.background = element_blank()) -> p2
 

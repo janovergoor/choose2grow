@@ -91,6 +91,15 @@ with open("../results/fig4_data.csv", 'w') as f:
         for x in xs:
             m.pk = {0: x, 1: 1 - x}
             x = writer.writerow([titles[i], 'r', x, -1 * m.ll()])
+        # both
+        # JR model
+        m = logit.MixedLogitModel('2d', D=Ds[i], vvv=0)
+        m.add_uniform_model()
+        m.add_log_degree_model(bounds=((1, 1),))
+        m.add_uniform_model()
+        m.add_uniform_fof_model()
+        m.fit()
+        x = writer.writerow([titles[i], '2d', '', -1 * m.ll()])
 
 
 #
