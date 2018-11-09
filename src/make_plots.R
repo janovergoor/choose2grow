@@ -108,53 +108,25 @@ ggsave('../results/fig_2.pdf', p, width=4.5, height=2.5)
 ## Figure 3 - Power law fits on degree of (r,p) graphs
 ##
 
-source("http://tuvalu.santafe.edu/~aaronc/powerlaws/plfit.r")
-
-DF <- list.files("../data/synth_graphs", pattern='[gd].*') %>%
-  mclapply(function(fn){
-    el <- read_csv(paste0("../data/synth_graphs/", fn), col_types='iii')
-    n_nodes <- max(el$from)
-    el <- el %>% group_by(to) %>% summarize(deg=n())
-    times <- max(n_nodes-length(el$deg), 0)
-    degs <- c(el$deg, rep(0,  times))
-    # compute powerlaw fit
-    fit <- plfit(el$deg, "range", seq(1.001,5,0.01))
-    # compute jacksons r
-    cdf <- el %>% group_by(deg) %>% summarize(n=n()) %>% ungroup() %>%
-      arrange(deg) %>% complete(deg=seq(max(deg)), fill=list(n=0)) %>%
-      mutate(F_d=cumsum(n)/sum(n))
-    rstar <- r_jackson(cdf$F_d, 4)
-    r_est <- rstar/(1+rstar)
-    # gather results
-    vals <- str_split(fn, '-')[[1]]
-    data.frame(type=vals[1], r=vals[2], p=vals[3], type2=vals[4], id=substr(vals[5], 1, 2),
-               alpha=fit$alpha, xmin=fit$xmin, r_est=r_est)
-  }, mc.cores=5) %>%
-  bind_rows() %>%
+DF <- read_csv("../results/fig3_data.csv", col_types='cccccd') %>%
   group_by(type, r, p, type2) %>%
-  summarize(mean_a=mean(alpha), ll_a=quantile(alpha, 0.25), ul_a=quantile(alpha, 0.75),
-            mean_r=mean(r_est), ll_r=quantile(r_est, 0.25), ul_r=quantile(r_est, 0.75)) %>%
+  summarize(mean_a=mean(alpha)) %>%
   ungroup() %>%
   mutate(
-    r=as.numeric(r),
-    # offset r slightly
-    r_off <- r + (as.numeric(p)-0.5)/50,
+    # offset r slightly for plot
+    r=as.numeric(r) + (as.numeric(p) - 0.5) / 50,
     Type=ifelse(type=='g', 'External / Growth', 'Internal / Densify'),
     Type2=ifelse(type2=='d', 'Directed', 'Undirected'),
     # compute p_hat
     p_hat=ifelse(type2=='d', (mean_a-2)/(mean_a-1), (mean_a-3)/(mean_a-1))
   )
 
-write_csv(DF, "../results/fig3_data.csv")
-
-p <- read_csv("../results/fig3_data.csv", col_types='ccccdddddddccd') %>%
-     filter(type=='g', type2=='u') %>%
-     ggplot(aes(x=r_off, y=mean_a, color=p)) +
+p <- ggplot(DF, aes(x=r, y=mean_a, color=p)) +
        geom_line() +
        geom_point(show.legend=F) +
        scale_color_manual(values=c("#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00")) + 
        scale_x_continuous("r", breaks=seq(0, 1, 0.25), labels=c('0','0.25','0.50','0.75','1')) +
-       scale_y_continuous(TeX("Estimate of $\\gamma$"), expand=c(0,0), limits=c(2, 5.1)) +
+       scale_y_continuous(TeX("Estimate of $\\gamma$"), expand=c(0,0), limits=c(2.5, 6.1)) +
        geom_hline(yintercept=3, color='grey', linetype='dashed') +
        my_theme() +
        theme(legend.title=element_text(hjust=0.5))

@@ -1,4 +1,9 @@
 import csv
+from glob import glob
+from collections import Counter
+# install from: https://github.com/keflavich/plfit/tree/master/plfit
+# remove plfit_v1.py before building, for Python 3 compatibility..
+import plfit
 import numpy as np
 import networkx as nx
 import util
@@ -59,7 +64,26 @@ with open("../results/fig2_data.csv", 'w') as f:
 ## Figure 3 - Power law fits on degree of (r,p) graphs
 ##
 
-# data processing happens in make_plots.R
+with open("../results/fig3_data.csv", 'w') as f:
+    writer = csv.writer(f)
+    tmp = writer.writerow(['type', 'r', 'p', 'type2', 'id', 'alpha'])
+    for graph in glob(util.data_path + '/synth_graphs/g-*-u-*.csv'):
+        # read data
+        degs = []
+        with open(graph, 'r') as f_in:
+            reader = csv.reader(f_in)
+            tmp = next(reader, None)  # skip the header
+            for row in reader:
+                degs += [row[1], row[2]]
+        degs = list(Counter(degs).values())
+        # run plfit
+        alpha = plfit.plfit(degs, discrete=True).plfit()[1]
+        # some fits are unstable, skip
+        if alpha > 6:
+            continue
+        # write results
+        graph_id = graph[:-4].split('/')[-1].split('-')
+        tmp = writer.writerow(graph_id + [alpha])
 
 
 
