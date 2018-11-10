@@ -126,7 +126,7 @@ p <- ggplot(DF, aes(x=r, y=mean_a, color=p)) +
        geom_point(show.legend=F) +
        scale_color_manual(values=c("#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00")) + 
        scale_x_continuous("r", breaks=seq(0, 1, 0.25), labels=c('0','0.25','0.50','0.75','1')) +
-       scale_y_continuous(TeX("Estimate of $\\gamma$"), expand=c(0,0), limits=c(2.5, 6.1)) +
+       scale_y_continuous(TeX("Estimate of $\\gamma$"), expand=c(0,0), limits=c(2.6, 5.7)) +
        geom_hline(yintercept=3, color='grey', linetype='dashed') +
        my_theme() +
        theme(legend.title=element_text(hjust=0.5))

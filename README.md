@@ -2,11 +2,19 @@
 
 This code and data repository accompanies the paper
 
-- [Choosing to grow a graph](..). Jan Overgoor, Austin R. Benson, Johan Ugander. 2018.
+- [Choosing to grow a graph](..). <a href="http://janovergoor.github.io/">Jan Overgoor</a>, <a href="http://www.cs.cornell.edu/~arb/">Austin R. Benson</a>, <a href="http://web.stanford.edu/~jugander/">Johan Ugander</a> 2018.
 
 For questions, please email Jan at overgoor@stanford.edu.
 
 The code for fitting logit models, as well as the code to generate the synthetic graphs for section 4.1, is written in Python 3. The code for the plots is written in R.
+
+We used the following versions of external python libraries:
+
+* `networkx=2.1`
+* `numpy=1.14.3`
+* `pandas=0.23.0`
+* `scipy=1.1.0`
+* `plfit` - install from [here](https://github.com/keflavich/plfit/tree/master/plfit), but remove `plfit_v1.py` before building, for Python 3 compatibility.
 
 
 ### Reproducing results and figures

@@ -1,8 +1,6 @@
 import csv
 from glob import glob
 from collections import Counter
-# install from: https://github.com/keflavich/plfit/tree/master/plfit
-# remove plfit_v1.py before building, for Python 3 compatibility..
 import plfit
 import numpy as np
 import networkx as nx
