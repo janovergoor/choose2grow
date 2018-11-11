@@ -27,23 +27,23 @@ To reproduce the results from Section 4.1 and 4.2, follow these steps (from the 
 
 For the analysis in Section 4.3, follow these steps:
 
-1. Download the Flickr data with `wget -4 http://socialnetworks.mpi-sws.mpg.de/data/flickr-growth.txt.gz ../data/`.
-2. Process the Flickr data with `python flickr_process.py`.
+1. Download the Flickr data with `curl -O -4 http://socialnetworks.mpi-sws.org/data/flickr-growth.txt.gz data/`. This file is about 141 Mb large.  
+2. Process the Flickr data with `python flickr_process.py`. This code takes a while to run.
 3. Build the RMarkdown report with `R -e "rmarkdown::render('../reports/flicrk_data.Rmd', output_file='../reports/flicrk_data.pdf')"`.
 
 For the analysis in Section 4.4, follow these steps:
 
-1. Download the Microsoft Academic Graph data with the following Bash code:
+1. Download the Microsoft Academic Graph. Warning, the uncompressed size of this data set is over 165Gb. Download it with the following Bash code:
     ```
     mkdir ~/mag_raw
     cd mag_raw
     for i in {0..8}
     do
-       wget -4 https://academicgraphv1wu.blob.core.windows.net/aminer/mag_papers_$i.zip
+       curl -O -4 https://academicgraphv1wu.blob.core.windows.net/aminer/mag_papers_$i.zip
        unzip mag_papers_$i.zip
     done
     ```
-2. Process the data with `python mag_process.py`. Note that you can change the field of study to process.
+2. Process the data with `python mag_process.py`. Note that you can change the field of study to process. This code takes a while to run.
 2. Build the RMarkdown report with `R -e "rmarkdown::render('../reports/mag_climatology.Rmd', output_file='../reports/mag_climatology.pdf')"`.
 
 Finally, to produce the figures of the paper, run the R code to make the plots with `Rscript make_plots.R`.

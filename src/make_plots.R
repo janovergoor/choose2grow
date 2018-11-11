@@ -92,9 +92,9 @@ p <- ggplot(DF, aes(deg, stat, color=label)) +
        geom_line(data=DF %>% filter(id=='ldl'), size=0.5) +
        geom_point(data=DF %>% filter(id=='newman'), shape=20, alpha=0.7) +
        geom_point(data=DF %>% filter(id=='npl'), shape=20, alpha=0.7) +
-       scale_x_log10("log Degree", labels=trans_format('log10', math_format(10^.x)), breaks=c(10^0, 10^1, 10^2), expand=c(0,0)) +
-       scale_y_log10("Relative likelihood", labels=trans_format('log10', math_format(10^.x)), expand=c(0,0)) +
-       coord_cartesian(xlim=c(1, 100), ylim=c(1, 100)) +
+       scale_x_log10("Degree", labels=trans_format('log10', math_format(10^.x)), breaks=c(10^0, 10^1, 10^2), expand=c(0,0), limits=c(0.9, 100)) +
+       scale_y_log10("Relative probability", labels=trans_format('log10', math_format(10^.x)), breaks=c(10^0, 10^1, 10^2), expand=c(0,0), limits=c(0.9, 100)) +
+       coord_cartesian(xlim=c(0.9, 100), ylim=c(0.9, 100)) +
        scale_color_manual(values=c("#E69F00", "#56B4E9", "#009E73", "#CC79A7"),
                           guide=guide_legend(override.aes=list(
                             linetype=c("blank", "blank", "solid", "solid"), shape=c(16, 16, NA, NA)))) +

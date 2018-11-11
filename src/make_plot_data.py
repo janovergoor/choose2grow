@@ -14,6 +14,7 @@ import synth_process
 ## Figure 1 - Likelihood surface
 ##
 
+D = util.read_data_single("%s/choices/%s.csv" % (util.data_path, 'g-1.00-0.50-u-00'))
 step = 0.01
 scores_uniform = np.array(1.0 / D.groupby('choice_id')['y'].aggregate(len))
 with open("../results/fig1_data.csv", 'w') as f:
@@ -106,7 +107,7 @@ synth_process.process_all_edges(graph + '.csv', n_alt=100)
 Ds = [util.read_data_single("%s/choices/%s.csv" % (util.data_path, 'g-1.00-0.50-u-fig3')),
       util.read_data_single("%s/choices/%s.csv" % (util.data_path, 'g-0.50-1.00-u-fig3'))]
 titles = ['r=1.00, p=0.50', 'r=0.50, p=1.00']
-xs = np.arange(0, 1.01, 0.05)
+xs = np.arange(0, 1.01, 0.01)
 
 with open("../results/fig4_data.csv", 'w') as f:
     writer = csv.writer(f)

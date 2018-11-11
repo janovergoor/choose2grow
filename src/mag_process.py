@@ -12,9 +12,11 @@ import util
     cd mag_raw
     for i in {0..8}
     do
-       wget -4 https://academicgraphv1wu.blob.core.windows.net/aminer/mag_papers_$i.zip
+       curl -O -4 https://academicgraphv1wu.blob.core.windows.net/aminer/mag_papers_$i.zip
        unzip mag_papers_$i.zip
     done
+
+  Warning: the uncompressed size of the data is 165 Gb, so make sure there is enough space.
 
   input : ~/mag_raw
   output: ../data/mag-*.csv

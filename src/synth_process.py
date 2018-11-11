@@ -8,6 +8,7 @@ from util import *
   Driver script #2 - Convert edge data to choice data
 
   This processes all graphs in `data_path/synth_graphs`.
+  This script takes a while to run.
   For each graph, the following data sets are produced:
 
   * /edges - relevant network context features for every edge
