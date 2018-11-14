@@ -1,8 +1,8 @@
 # Choosing to Grow a Graph
 
-This code and data repository accompanies the paper
+This code and data repository accompanies the paper:
 
-- [Choosing to grow a graph](..). <a href="http://janovergoor.github.io/">Jan Overgoor</a>, <a href="http://www.cs.cornell.edu/~arb/">Austin R. Benson</a>, <a href="http://web.stanford.edu/~jugander/">Johan Ugander</a> 2018.
+- [Choosing to grow a graph](https://arxiv.org/pdf/1811.05008.pdf) - <a href="http://janovergoor.github.io/">Jan Overgoor</a>, <a href="http://www.cs.cornell.edu/~arb/">Austin R. Benson</a>, <a href="http://web.stanford.edu/~jugander/">Johan Ugander</a>. (2018)
 
 For questions, please email Jan at overgoor@stanford.edu.
 
