@@ -605,38 +605,45 @@ class LogDegreeModel(LogitModel):
 
 class FeatureModel(LogitModel):
     """
-    This class represents a multinomial logit model, with a single feature (X).
-    The model has 1 parameter.
+    This class represents a multinomial logit model, with arbitrary features.
+    The model has k parameters.
     """
-    def __init__(self, model_id, max_deg=50, bounds=None, D=None, vvv=False):
+    def __init__(self, model_id, bounds=None, D=None, vvv=False, features=['deg']):
         """
         Constructor inherits from LogitModel.
         """
-        LogitModel.__init__(self, model_id, max_deg=max_deg, bounds=bounds, D=D, vvv=vvv)
+        LogitModel.__init__(self, model_id, bounds=bounds, D=D, vvv=vvv)
         self.model_type = 'feature'
         self.model_short = 'f'
+        self.features = features
+        self.k = len(self.features)  # number of features
+        self.u = [0] * len(self.features)
+
 
     def individual_likelihood(self, u):
         """
         Individual likelihood function of the log logit model.
         Computes the likelihood for every data point (choice) separately.
 
-        L(alpha, (x,C)) = exp(alpha * X) / sum_{y in C} exp(alpha * X)
+        L(u, (x,C)) = exp(u * X) / sum_{y in C} exp(u * X)
+
+        u is actually theta, legacy name
         """
         # transform degree to score
-        self.D['score'] = np.exp(u * self.D['X'])
+        self.D['score'] = np.exp((self.D[self.features] * u).sum(axis=1))
         # compute total utility per case
         score_tot = self.D.groupby('choice_id')['score'].aggregate(np.sum)
         # compute probabilities of choices
         return np.array(self.D.loc[self.D.y == 1, 'score']) / np.array(score_tot)
 
+
     def grad(self, u=None, w=None):
         """
         Gradient function of log logit model.
 
-        grad(alpha, D) = sum_{(x,C) in D} [ alpha*ln(k_x) -
-          (sum_{y in C} ln(k_y)*exp(alpha*ln(k_y))) /
-          (sum_{y in C}         exp(alpha*ln(k_y)))
+        grad(theta_i, D) = sum_{(x,C) in D} [ x_i -
+          (sum_{y in C} y_i*exp(theta*y)) /
+          (sum_{y in C}     exp(theta*y))
         ]
         """
         # if no parameters specified, use the parameters of the object itself
@@ -646,17 +653,23 @@ class FeatureModel(LogitModel):
         if w is None:
             w = np.array([1] * self.n)
         # transform degree to score
-        self.D['score'] = np.exp(u * self.D['X'])
-        # take log_degree for chosen examples
-        choices = self.D.loc[self.D.y == 1, 'X']
-        # compute 'numerator score'
-        self.D['nscore'] = self.D['score'] * self.D['X']
-        # compute numerator
-        num = self.D.groupby('choice_id')['nscore'].aggregate(np.sum)
-        # compute denominator
-        denom = self.D.groupby('choice_id')['score'].aggregate(np.sum)
-        # weight probabilities
-        return np.array([-1 * np.sum(w * (np.array(choices) - num/denom))])
+        self.D['score'] = np.exp((self.D[self.features] * u).sum(axis=1))
+        # initialize empty gradient vector to append to
+        grad = np.array([])
+        # compute each k-specific gradient separately
+        for f in self.features:
+            # take log_degree for chosen examples
+            choices = self.D.loc[self.D.y == 1, f]
+            # compute 'numerator score'
+            self.D['nscore'] = self.D['score'] * self.D[f]
+            # compute numerator
+            num = self.D.groupby('choice_id')['nscore'].aggregate(np.sum)
+            # compute denominator
+            denom = self.D.groupby('choice_id')['score'].aggregate(np.sum)
+            # weight probabilities, add to grad matrix
+            grad = np.append(grad, np.sum(w * (np.array(choices) - num/denom)))
+        return -1 * grad
+
 
 
 class UniformFofModel(LogitModel):
