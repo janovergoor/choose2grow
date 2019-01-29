@@ -603,6 +603,62 @@ class LogDegreeModel(LogitModel):
         return np.array([-1 * np.sum(w * (np.array(choices) - num/denom))])
 
 
+class FeatureModel(LogitModel):
+    """
+    This class represents a multinomial logit model, with a single feature (X).
+    The model has 1 parameter.
+    """
+    def __init__(self, model_id, max_deg=50, bounds=None, D=None, vvv=False):
+        """
+        Constructor inherits from LogitModel.
+        """
+        LogitModel.__init__(self, model_id, max_deg=max_deg, bounds=bounds, D=D, vvv=vvv)
+        self.model_type = 'feature'
+        self.model_short = 'f'
+
+    def individual_likelihood(self, u):
+        """
+        Individual likelihood function of the log logit model.
+        Computes the likelihood for every data point (choice) separately.
+
+        L(alpha, (x,C)) = exp(alpha * X) / sum_{y in C} exp(alpha * X)
+        """
+        # transform degree to score
+        self.D['score'] = np.exp(u * self.D['X'])
+        # compute total utility per case
+        score_tot = self.D.groupby('choice_id')['score'].aggregate(np.sum)
+        # compute probabilities of choices
+        return np.array(self.D.loc[self.D.y == 1, 'score']) / np.array(score_tot)
+
+    def grad(self, u=None, w=None):
+        """
+        Gradient function of log logit model.
+
+        grad(alpha, D) = sum_{(x,C) in D} [ alpha*ln(k_x) -
+          (sum_{y in C} ln(k_y)*exp(alpha*ln(k_y))) /
+          (sum_{y in C}         exp(alpha*ln(k_y)))
+        ]
+        """
+        # if no parameters specified, use the parameters of the object itself
+        if u is None:
+            u = self.u
+        # if no weights specified, default to 1
+        if w is None:
+            w = np.array([1] * self.n)
+        # transform degree to score
+        self.D['score'] = np.exp(u * self.D['X'])
+        # take log_degree for chosen examples
+        choices = self.D.loc[self.D.y == 1, 'X']
+        # compute 'numerator score'
+        self.D['nscore'] = self.D['score'] * self.D['X']
+        # compute numerator
+        num = self.D.groupby('choice_id')['nscore'].aggregate(np.sum)
+        # compute denominator
+        denom = self.D.groupby('choice_id')['score'].aggregate(np.sum)
+        # weight probabilities
+        return np.array([-1 * np.sum(w * (np.array(choices) - num/denom))])
+
+
 class UniformFofModel(LogitModel):
     """
     This class represents a uniform logit model with only friends of friends
