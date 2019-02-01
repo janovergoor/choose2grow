@@ -1,0 +1,413 @@
+---
+title: "Importance Sampling"
+author: "Jan Overgoor"
+params:
+  date: "Sys.Date()"
+output:
+  pdf_document:
+    toc: yes
+    toc_depth: 2
+  html_document:
+    code_folding: hide
+    self_contained: yes
+    toc: yes
+    toc_depth: 2
+---
+
+```
+to build from command-line, run with:
+R -e "rmarkdown::render('sampling.Rmd', output_file='sampling.html')"
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo=F, warning=F, cache=T, message=F, fig.width=5, fig.height=3)
+library(tidyverse)
+library(mlogit)
+library(latex2exp)
+library(parallel)
+library(stargazer)
+#setwd("~/choosing_to_grow/choose2grow/data/choices")
+
+my_theme <- function(base_size=10) {
+  # Set the base size
+  theme_bw(base_size=base_size) +
+    theme(
+      # Center title
+      plot.title = element_text(hjust=0.5),
+      # Make the background white, with open top-right
+      panel.grid.major=element_blank(),
+      panel.grid.minor=element_blank(),
+      axis.line=element_line(colour="black"),
+      panel.border=element_blank(),
+      panel.background=element_blank(),
+      # Minimize margins
+      plot.margin=unit(c(0.2, 0.2, 0.2, 0.2), "cm"),
+      panel.spacing=unit(0.25, "lines"),
+      # Tiny space between axis labels and tick labels
+      axis.title.x=element_text(margin=ggplot2::margin(t=6.0)),
+      axis.title.y=element_text(margin=ggplot2::margin(r=6.0)),
+      # Simplify the legend
+      legend.title=element_blank(),
+      legend.key=element_blank(),
+      legend.background=element_rect(fill='transparent')
+    )
+}
+```
+
+First we read the data.
+```{r}
+# read data
+d = read_csv("~/projects/choosing_to_grow/choose2grow/negative_sampling/test_sampling_v1.csv", col_types='diiiidi')
+```
+
+Data is constructed as follows:
+
+* start with `G = nx.erdos_renyi_graph(2000, 0.005, seed=None, directed=False)`
+* construct $n=1000$ edges, sample $i$ uniformly, sample $j$ according to conditional logit with $u_{ij} = 0.5\cdot \log k_j + 2 \cdot 1\{ FoF_{ij}\}$.
+
+# 1. Single Models
+
+### Model 1 - No Sampling
+```{r}
+d1 <- mlogit.data(d, shape="long", chid.var='t', choice="y", alt.var='j')
+```
+Does it model utility well?
+We fit $p(x_{ij}) \sim \theta_0 \cdot u_{ij}$.
+The ground truth is $\theta_0 = 1$.
+```{r}
+f_u1 <- mlogit(y ~ u | 0, d1)
+coef(f_u1)
+```
+Does it fit the parameters well?
+We fit $p(x_{ij}) \sim \theta_1 \cdot k_j + \theta_2 \cdot fof_{ij}$.
+The ground truth is $\theta_1 = 0.5$ and $\theta_2=2$.
+```{r}
+f1 <- mlogit(y ~ log(deg) + fof | 0, d1)
+coef(f1)
+```
+It slighly underestimates $\theta_1$, the role of degree.
+
+```{r}
+# compute predictions
+Ht = mlogit.data(d %>% filter(t<2), shape="long", chid.var='t', choice="y", alt.var='j')
+ps = predict(f1, newdata=Ht)
+ps = data.frame(t=c(rep(0, 2000), rep(1, 2000)), j=rep(colnames(ps), 2), p_pred=c(ps[1,], ps[2,]))
+Ht %>% inner_join(ps) %>% group_by(t) %>% mutate(p_act=exp(u)/sum(exp(u)), delta=p_pred/p_act) -> Ht
+```
+```{r pt1_diagnostics, eval=F}
+ggplot(Ht, aes(p_act, p_pred)) + geom_point() + xlab("Actual Probability") + ylab("Predicted Probability") + facet_wrap(~t)
+
+ggplot(Ht %>% filter(t==0) %>% mutate(Is_FoF=as.factor(fof)), aes(x=deg)) + geom_point(aes(y=p_pred, col='Predicted')) +
+  geom_point(aes(y=p_act , col='Actual')) + xlab("Degree") + ylab("Probability") + facet_wrap(~Is_FoF)
+
+ggplot(Ht %>% mutate(Is_FoF=as.factor(fof)), aes(x=deg, p_pred/p_act)) +
+  geom_point(aes(color=Is_FoF)) + xlab("Degree") + ylab("Predicted/Actual Probability") + geom_hline(yintercept = 1, color='black') + my_theme()
+```
+
+
+### Model 2 - uniform sampling (s=10)
+
+```{r model2_test, eval=F}
+ds = read_csv("~/projects/choosing_to_grow/choose2grow/data/choices/test_sampling_down.csv", col_types='ciiiidid') %>%
+  mutate(t=as.integer(choice_id)) %>%
+  group_by(t) %>% mutate(alt=row_number()) %>%
+  mlogit.data(shape="long", chid.var='t', choice="y", alt.var='alt')
+
+coef(mlogit(y ~ u | 0, ds))
+coef(mlogit(y ~ log(deg) + fof | 0, ds))
+```
+
+```{r}
+d2 <- bind_rows(d %>% filter(y==1),
+               d %>% filter(y==0) %>% group_by(t) %>% sample_n(10)) %>%
+      group_by(t) %>% mutate(alt=row_number()) %>%
+      mlogit.data(shape="long", chid.var='t', choice="y", alt.var='alt')
+```
+Does it model utility well?
+```{r}
+coef(mlogit(y ~ u | 0, d2))
+```
+Does it fit the parameters well?
+```{r}
+coef(mlogit(y ~ log(deg) + fof | 0, d2))
+```
+
+
+
+
+
+# 2. Many models
+
+In Python, for $s \in [5, 10, 20, 50, 100]$, do uniform sampling 100 times, compute both utility model and parameter model.
+
+```{r all_models, eval=F}
+# do full loop 32*4 = 128 times
+res <- mclapply(1:128, function(it){
+  # do different sample volumes once each
+  lapply(c(5, 10, 20, 50, 100, 500), function(s) {
+    # sample data
+    dt <- bind_rows(d %>% filter(y==1),
+                    d %>% filter(y==0) %>% group_by(t) %>% sample_n(s)) %>%
+          arrange(t, y) %>%
+         mlogit.data(shape="long", chid.var='t', choice="y", alt.var='j')
+    # fit both models
+    f_u <- mlogit(y ~ u | 0, dt)
+    f_p <- mlogit(y ~ log(deg + 1e-8) + fof | 0, dt)
+    data.frame(i=it, s=s, theta_0=coef(f_u), theta_1=coef(f_p)[1], theta_2=coef(f_p)[2])
+  }) %>% bind_rows()
+}, mc.cores=32) %>% bind_rows()
+
+write_csv(res, "~/choosing_to_grow/choose2grow/reports/sampling_data_v1.csv")
+```
+```{r all_res, fig.width=10, fig.height=3, eval=F}
+res <- read_csv("~/choosing_to_grow/choose2grow/reports/sampling_data_v1.csv", col_types='iiddd')
+res <- rbind(res %>% mutate(s=paste0('s=', s)),
+            data.frame(i=0, s='all', theta_0=coef(f_u1), theta_1=coef(f1)[1], theta_2=coef(f1)[2])) %>%
+  mutate(s=factor(s, levels=c(paste0('s=', c(5,10,20,50,100,500)), 'all')))
+
+Rmisc::multiplot(
+  ggplot(res, aes(s, theta_0)) + geom_boxplot() +
+    xlab("Choice set size") + ylab("Coeffient estimate") + ggtitle(TeX("$\\theta_0$ $(=u)$")) +
+    geom_hline(yintercept=1) + my_theme(),
+  ggplot(res, aes(s, theta_1)) + geom_boxplot() +
+    xlab("Choice set size") + ylab("Coeffient estimate") + ggtitle(TeX("$\\theta_1$")) +
+    geom_hline(yintercept=0.5) + my_theme(),
+  ggplot(res, aes(s, theta_2)) + geom_boxplot() +
+    xlab("Choice set size") + ylab("Coeffient estimate") + ggtitle(TeX("$\\theta_2$")) +
+    geom_hline(yintercept=2) + my_theme(),
+  cols=3
+)
+```
+
+```{r pt2_converge_single, fig.width=10, fig.height=3}
+res <- read_csv("~/projects/choosing_to_grow/choose2grow/reports/sampling_data_py_v3.csv", col_types='iicddd') %>%
+  #filter(s==0) %>%
+  mutate(s=ifelse(s=='all', s, paste0('s=', s)),
+         s=factor(s, levels=c(paste0('s=', c(5,10,20,50,100,500)), 'all')))
+
+Rmisc::multiplot(
+  ggplot(res %>% filter(i==0), aes(s, theta_0)) + geom_boxplot() + xlab("Choice set size") + ylab("Coeffient estimate") + ggtitle("theta_0") + geom_hline(yintercept=1) + my_theme(),
+  ggplot(res %>% filter(i==0), aes(s, theta_1)) + geom_boxplot() + xlab("Choice set size") + ylab("Coeffient estimate") + ggtitle("theta_1") + geom_hline(yintercept=0.5) + my_theme(),
+  ggplot(res %>% filter(i==0), aes(s, theta_2)) + geom_boxplot() + xlab("Choice set size") + ylab("Coeffient estimate") + ggtitle("theta_2") + geom_hline(yintercept=2) + my_theme(),
+  cols=3
+)
+```
+The estimates converge to `all`, with less variance as $s$ decreases. However, there is a bias in the parameter estimates, even for `all`.
+
+```{r, eval=F}
+Rmisc::multiplot(
+  ggplot(res, aes(s, theta_0)) + geom_boxplot() + ylab("theta_0") + geom_hline(yintercept=1) +
+    facet_wrap(~i, ncol=10) + my_theme() + theme(axis.title.x=element_blank()),
+  ggplot(res, aes(s, theta_1)) + geom_boxplot() + ylab("theta_1") + geom_hline(yintercept=0.5) +
+    facet_wrap(~i, ncol=10) + my_theme() + theme(axis.title.x=element_blank()),
+  ggplot(res, aes(s, theta_2)) + geom_boxplot() + ylab("theta_2") + geom_hline(yintercept=2) +
+    facet_wrap(~i, ncol=10) + my_theme() + theme(axis.title.x=element_blank()),
+  rows=3
+```
+
+```{r pt2_converge_multiple, fig.width=9, fig.height=7}
+ggplot(res %>% filter(i<9), aes(s, theta_0)) + geom_boxplot() + xlab("Choice set size") + ylab("Coeffient estimate") + ggtitle("theta_0")  + geom_hline(yintercept=1) + facet_wrap(~i, scales='free_y') + my_theme()
+```
+This looks to be variance in the data generating process.
+
+Here is a version with better presentation:
+
+$\ \ $
+
+```{r plot_compare, fig.width=8, fig.height=3}
+Rmisc::multiplot(
+  ggplot(res %>% filter(i==4), aes(s, theta_1)) + geom_boxplot() + xlab("Choice set size") + ggtitle(TeX("$\\theta_1$")) + ylab("Coeffient estimate") + geom_hline(yintercept=0.5) + my_theme(),
+  ggplot(res %>% filter(i==8), aes(s, theta_2)) + geom_boxplot() + xlab("Choice set size") + ggtitle(TeX("$\\theta_2$")) + ylab("Coeffient estimate") + geom_hline(yintercept=2) + my_theme(),
+  cols=2
+)
+```
+
+# 3. Non-Uniform sampling
+
+## $u_=0.5\cdot k_x + 2\cdot FoF_x$
+
+What share of alternatives has FoF option?
+
+```{r strat_plot_debug, fig.width=8, fig.height=2.5}
+dN <- read_csv("~/projects/choosing_to_grow/choose2grow/negative_sampling/test_sampling_v2_id0.csv", col_types='diiiidi')
+
+
+p1 = dN %>% group_by(t) %>% summarize(fof=mean(fof)) %>% ggplot(aes(fof)) + geom_density() + xlab("Share alternatives are FoF") + ylab("Density") + my_theme()
+
+# What share of choice sets has FoF option
+
+d_1 = dN %>% filter(y==1)
+d_0 = dN %>% filter(y==0)
+
+p2 <- bind_rows(
+  bind_rows(d_1, d_0 %>% group_by(t) %>% sample_n(5  )) %>% group_by(t) %>% summarize(fof=max(fof)) %>% ungroup() %>% summarize(p=mean(fof)) %>% mutate(s='s=5'),
+  bind_rows(d_1, d_0 %>% group_by(t) %>% sample_n(10 )) %>% group_by(t) %>% summarize(fof=max(fof)) %>% ungroup() %>% summarize(p=mean(fof)) %>% mutate(s='s=10'),
+  bind_rows(d_1, d_0 %>% group_by(t) %>% sample_n(20 )) %>% group_by(t) %>% summarize(fof=max(fof)) %>% ungroup() %>% summarize(p=mean(fof)) %>% mutate(s='s=20'),
+  bind_rows(d_1, d_0 %>% group_by(t) %>% sample_n(50 )) %>% group_by(t) %>% summarize(fof=max(fof)) %>% ungroup() %>% summarize(p=mean(fof)) %>% mutate(s='s=50'),
+  bind_rows(d_1, d_0 %>% group_by(t) %>% sample_n(100)) %>% group_by(t) %>% summarize(fof=max(fof)) %>% ungroup() %>% summarize(p=mean(fof)) %>% mutate(s='s=100'),
+  #bind_rows(d_1, d_0 %>% group_by(t) %>% sample_n(500)) %>% group_by(t) %>% summarize(fof=max(fof)) %>% ungroup() %>% summarize(p=mean(fof)) %>% mutate(s='s=500'),
+  d %>% group_by(t) %>% summarize(fof=max(fof)) %>% ungroup() %>% summarize(p=mean(fof)) %>% mutate(s='all')
+)  %>%
+  mutate(s=factor(s, levels=c(paste0('s=', c(5,10,20,50,100,500)), 'all'))) %>%
+  ggplot(aes(s, p)) + geom_bar(stat='identity') + xlab("Choice set size") + ylab("Share of choice sets with FoF option") + my_theme()
+
+Rmisc::multiplot(p1, p2, cols=2)
+```
+
+Fit with uniform sampling and stratified by Fof (both $s=10$).
+
+```{r strat_model}
+dN = read_csv("~/projects/choosing_to_grow/choose2grow/negative_sampling/test_sampling_v2_id0.csv", col_types='diiiidi')
+
+d2_unif = bind_rows(dN %>% filter(y==1),
+                    dN %>% filter(y==0) %>% group_by(t) %>% sample_n(10)) %>%
+      group_by(t) %>% mutate(alt=row_number()) %>%
+      mlogit.data(shape="long", chid.var='t', choice="y", alt.var='alt')
+
+f2_unif_u = mlogit(y ~ u              | 0, d2_unif)
+f2_unif_p = mlogit(y ~ log(deg) + fof | 0, d2_unif)
+
+d2_strat = bind_rows(dN %>% filter(y==1),
+                     dN %>% filter(y==0) %>% filter(fof==1) %>% group_by(t) %>% sample_n(5),
+                     dN %>% filter(y==0) %>% filter(fof==0) %>% group_by(t) %>% sample_n(5)) %>%
+      group_by(t) %>% mutate(alt=row_number()) %>%
+      mlogit.data(shape="long", chid.var='t', choice="y", alt.var='alt')
+
+f2_strat_u = mlogit(y ~ u              | 0, d2_strat)
+f2_strat_p = mlogit(y ~ log(deg) + fof | 0, d2_strat)
+
+d2_strat2 = bind_rows(dN %>% filter(y==1) %>% mutate(w=1),
+                      dN %>% filter(y==0) %>% filter(fof==1) %>% group_by(t) %>% mutate(n=n()) %>% sample_n(5) %>% mutate(w=n/5),
+                      dN %>% filter(y==0) %>% filter(fof==0) %>% group_by(t) %>% mutate(n=n()) %>% sample_n(5) %>% mutate(w=n/5)) %>%
+      group_by(t) %>% mutate(alt=row_number()) %>%
+      arrange(t, alt) %>%
+      mlogit.data(shape="long", chid.var='t', choice="y", alt.var='alt')
+
+f2_strat2_u = mlogit(y ~ u              | 0, data=d2_strat2, weights=w)
+f2_strat2_p = mlogit(y ~ log(deg) + fof | 0, data=d2_strat2, weights=w)
+
+stargazer::stargazer(f2_unif_u, f2_strat_u, f2_unif_p, f2_strat_p,
+  #column.labels = c( "Unif", "Strat", "Strat+Adj", "Unif", "Strat", "Strat+Adj"),
+  column.labels = c( "Unif", "Strat",  "Unif", "Strat"), no.space = T,
+  type='text')
+```
+
+Now, result from doing it correctly (fitting in Python).
+
+```{r strat_plot_comp, fig.width=8, fig.height=2}
+dx = read_csv("/Users/janovergoor/projects/choosing_to_grow/choose2grow/reports/sampling_data_strat.csv") %>%
+  gather(stat, val, -i, -s) %>%
+  separate(stat, into=c('stat','cov'), sep='_')
+
+dx = read_csv("/Users/janovergoor/projects/choosing_to_grow/choose2grow/reports/sampling_data_strat2.csv") %>%
+  gather(stat, val, -i, -s) %>%
+  separate(stat, into=c('stat','cov'), sep='_')
+
+dx2 <- inner_join(
+  dx %>% filter(stat=='mu'),
+  dx %>% filter(stat=='se'),
+  by=c('i','s','cov')) %>%
+  select(i, s, cov, mu=val.x, se=val.y)
+
+dx2 %>% mutate(s=factor(s, levels=c("all","unif",'strat','strat_adj'))) %>%
+  mutate(cov=plyr::mapvalues(cov, from=0:2, to=c("theta_0","theta_1","theta_2"))) %>%
+  ggplot(aes(x=s, y=mu)) + geom_point() + geom_segment(aes(xend=s, y=mu-1.96*se, yend=mu+1.96*se)) +
+    facet_wrap(~cov, scales='free_y') + ylab("Estimate") +
+    geom_hline(data=data.frame(cov=c("theta_0","theta_1","theta_2"), y=c(1, 0.5, 2)), aes(yintercept=y), color='grey') +
+    my_theme() + theme(axis.title.x=element_blank())
+
+dx2 %>% select(-i) %>% filter(s != 'strat') %>% mutate(cov=paste('theta_', cov)) %>%
+  knitr::kable(format='markdown', col.names=c("Method","Covariate","Mean", "SE"))
+```
+
+
+
+## $u_=0.5\cdot k_x + 5\cdot FoF_x$
+
+What share of alternatives has FoF option?
+
+```{r strat2_plot_debug, fig.width=8, fig.height=2.5}
+dN <- read_csv("~/projects/choosing_to_grow/choose2grow/negative_sampling/test_sampling_v3_id9.csv", col_types='diiiidi')
+
+p1 <- dN %>% group_by(t) %>% summarize(fof=mean(fof)) %>% ggplot(aes(fof)) + geom_density() + xlab("Share alternatives are FoF") + ylab("Density") + my_theme()
+
+# What share of choice sets has FoF option
+
+d_1 = dN %>% filter(y==1)
+d_0 = dN %>% filter(y==0)
+
+p2 <- bind_rows(
+  bind_rows(d_1, d_0 %>% group_by(t) %>% sample_n(5  )) %>% group_by(t) %>% summarize(fof=max(fof)) %>% ungroup() %>% summarize(p=mean(fof)) %>% mutate(s='s=5'),
+  bind_rows(d_1, d_0 %>% group_by(t) %>% sample_n(10 )) %>% group_by(t) %>% summarize(fof=max(fof)) %>% ungroup() %>% summarize(p=mean(fof)) %>% mutate(s='s=10'),
+  bind_rows(d_1, d_0 %>% group_by(t) %>% sample_n(20 )) %>% group_by(t) %>% summarize(fof=max(fof)) %>% ungroup() %>% summarize(p=mean(fof)) %>% mutate(s='s=20'),
+  bind_rows(d_1, d_0 %>% group_by(t) %>% sample_n(50 )) %>% group_by(t) %>% summarize(fof=max(fof)) %>% ungroup() %>% summarize(p=mean(fof)) %>% mutate(s='s=50'),
+  bind_rows(d_1, d_0 %>% group_by(t) %>% sample_n(100)) %>% group_by(t) %>% summarize(fof=max(fof)) %>% ungroup() %>% summarize(p=mean(fof)) %>% mutate(s='s=100'),
+  #bind_rows(d_1, d_0 %>% group_by(t) %>% sample_n(500)) %>% group_by(t) %>% summarize(fof=max(fof)) %>% ungroup() %>% summarize(p=mean(fof)) %>% mutate(s='s=500'),
+  d %>% group_by(t) %>% summarize(fof=max(fof)) %>% ungroup() %>% summarize(p=mean(fof)) %>% mutate(s='all')
+)  %>%
+  mutate(s=factor(s, levels=c(paste0('s=', c(5,10,20,50,100,500)), 'all'))) %>%
+  ggplot(aes(s, p)) + geom_bar(stat='identity') + xlab("Choice set size") + ylab("Share of choice sets with FoF option") + my_theme()
+
+Rmisc::multiplot(p1, p2, cols=2)
+```
+
+Fit with uniform sampling and stratified by Fof (both $s=10$).
+
+```{r strat2_model}
+d2_unif = bind_rows(dN %>% filter(y==1),
+                    dN %>% filter(y==0) %>% group_by(t) %>% sample_n(10)) %>%
+      group_by(t) %>% mutate(alt=row_number()) %>%
+      mlogit.data(shape="long", chid.var='t', choice="y", alt.var='alt')
+
+f2_unif_u = mlogit(y ~ u              | 0, d2_unif)
+f2_unif_p = mlogit(y ~ log(deg+1e-8) + fof | 0, d2_unif)
+
+d2_strat = bind_rows(dN %>% filter(y==1),
+                     dN %>% filter(y==0) %>% filter(fof==1) %>% group_by(t) %>% sample_n(5, replace=T),
+                     dN %>% filter(y==0) %>% filter(fof==0) %>% group_by(t) %>% sample_n(5, replace=T)) %>%
+      group_by(t) %>% mutate(alt=row_number()) %>%
+      mlogit.data(shape="long", chid.var='t', choice="y", alt.var='alt')
+
+f2_strat_u = mlogit(y ~ u              | 0, d2_strat)
+f2_strat_p = mlogit(y ~ log(deg+1e-8) + fof | 0, d2_strat)
+
+d2_strat2 = bind_rows(dN %>% filter(y==1) %>% mutate(w=1),
+                      dN %>% filter(y==0) %>% filter(fof==1) %>% group_by(t) %>% mutate(n=n()) %>% sample_n(5, replace=T) %>% mutate(w=n/5),
+                      dN %>% filter(y==0) %>% filter(fof==0) %>% group_by(t) %>% mutate(n=n()) %>% sample_n(5, replace=T) %>% mutate(w=n/5)) %>%
+      group_by(t) %>% mutate(alt=row_number()) %>%
+      arrange(t, alt) %>%
+      mlogit.data(shape="long", chid.var='t', choice="y", alt.var='alt')
+
+f2_strat2_u = mlogit(y ~ u              | 0, data=d2_strat2, weights=w)
+f2_strat2_p = mlogit(y ~ log(deg+1e-8) + fof | 0, data=d2_strat2, weights=w)
+
+stargazer::stargazer(f2_unif_u, f2_strat_u, f2_unif_p, f2_strat_p,
+  #column.labels = c( "Unif", "Strat", "Strat+Adj", "Unif", "Strat", "Strat+Adj"),
+  column.labels = c( "Unif", "Strat",  "Unif", "Strat"), no.space = T,
+  type='text')
+```
+
+Now, result from doing it correctly (fitting in Python).
+
+
+```{r strat2_plot_comp, fig.width=8, fig.height=2}
+dx = read_csv("/Users/janovergoor/projects/choosing_to_grow/choose2grow/reports/sampling_data_strat2.csv") %>%
+  gather(stat, val, -i, -s) %>%
+  separate(stat, into=c('stat','cov'), sep='_')
+
+dx2 <- inner_join(
+  dx %>% filter(stat=='mu'),
+  dx %>% filter(stat=='se'),
+  by=c('i','s','cov')) %>%
+  select(i, s, cov, mu=val.x, se=val.y)
+
+dx2 %>% mutate(s=factor(s, levels=c("all","unif",'strat','strat_adj'))) %>%
+  mutate(cov=plyr::mapvalues(cov, from=0:2, to=c("theta_0","theta_1","theta_2"))) %>%
+  ggplot(aes(x=s, y=mu)) + geom_point() + geom_segment(aes(xend=s, y=mu-1.96*se, yend=mu+1.96*se)) +
+    facet_wrap(~cov, scales='free_y') + ylab("Estimate") +
+    geom_hline(data=data.frame(cov=c("theta_0","theta_1","theta_2"), y=c(1, 0.5, 5)), aes(yintercept=y), color='grey') +
+    my_theme() + theme(axis.title.x=element_blank())
+
+dx2 %>% select(-i) %>% filter(s != 'strat') %>% mutate(cov=paste('theta_', cov)) %>%
+  knitr::kable(format='markdown', col.names=c("Method","Covariate","Mean", "SE"))
+```

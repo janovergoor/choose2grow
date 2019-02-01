@@ -18,7 +18,7 @@ class LogitModel:
     """
     This class represents a generic logit model.
     """
-    def __init__(self, model_id, max_deg=50, bounds=None, D=None, vvv=0):
+    def __init__(self, model_id, max_deg=50, bounds=None, D=None, vvv=0, sw=None):
         """
         Constructor for a LogitModel object. The data can be provided directly,
         or it can be read in from file.
@@ -30,6 +30,7 @@ class LogitModel:
         max_deg -- the max degree that will be considered (default: 50)
         D -- 2d-array representing choice options
         vvv -- int representing level of debug output [0:none, 1:some, 2:lots]
+        sample_weights -- column str representing the sample weights
 
         If data is supplied directly, D is a (n*i)x4 matrix, where each
         choice set has i choices, exactly one of which should be chosen.
@@ -47,6 +48,13 @@ class LogitModel:
             self.exception("neither filename nor D are specified..")
         self.n = len(set(self.D.choice_id))  # number of examples
         self.d = max_deg + 1  # number of degrees considered
+        if sw is not None:
+            if sw in list(D):
+                self.D['sw'] = D[sw]
+            else:
+                self.exception("sample weight column %s doesn't exist in the data.." % sw)
+        else:
+                self.D['sw'] = np.array([1] * self.D.shape[0])
 
         # initiate the rest of the parameters
         self.n_it = 0  # number of iterations for optimization
@@ -362,7 +370,6 @@ class MixedLogitModel(LogitModel):
         return fn
 
 
-
 class UniformModel(LogitModel):
     """
     This class represents a uniform logit model.
@@ -608,11 +615,11 @@ class FeatureModel(LogitModel):
     This class represents a multinomial logit model, with arbitrary features.
     The model has k parameters.
     """
-    def __init__(self, model_id, bounds=None, D=None, vvv=False, features=['deg']):
+    def __init__(self, model_id, bounds=None, D=None, vvv=False, sw=None, features=['deg']):
         """
         Constructor inherits from LogitModel.
         """
-        LogitModel.__init__(self, model_id, bounds=bounds, D=D, vvv=vvv)
+        LogitModel.__init__(self, model_id, bounds=bounds, D=D, vvv=vvv, sw=sw)
         self.model_type = 'feature'
         self.model_short = 'f'
         self.features = features
@@ -630,7 +637,7 @@ class FeatureModel(LogitModel):
         u is actually theta, legacy name
         """
         # transform degree to score
-        self.D['score'] = np.exp((self.D[self.features] * u).sum(axis=1))
+        self.D['score'] = np.exp((self.D[self.features] * u).sum(axis=1) - np.log(self.D['sw']))
         # compute total utility per case
         score_tot = self.D.groupby('choice_id')['score'].aggregate(np.sum)
         # compute probabilities of choices
@@ -653,7 +660,7 @@ class FeatureModel(LogitModel):
         if w is None:
             w = np.array([1] * self.n)
         # transform degree to score
-        self.D['score'] = np.exp((self.D[self.features] * u).sum(axis=1))
+        self.D['score'] = np.exp((self.D[self.features] * u).sum(axis=1) - np.log(self.D['sw']))
         # initialize empty gradient vector to append to
         grad = np.array([])
         # compute each k-specific gradient separately
@@ -669,7 +676,6 @@ class FeatureModel(LogitModel):
             # weight probabilities, add to grad matrix
             grad = np.append(grad, np.sum(w * (np.array(choices) - num/denom)))
         return -1 * grad
-
 
 
 class UniformFofModel(LogitModel):
