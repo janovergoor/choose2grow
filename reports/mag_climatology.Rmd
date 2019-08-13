@@ -402,5 +402,5 @@ DF <- rbind(
   data.frame(deg=0:100, est=predict(fs[[3]], D_test), model='3', type='line')
 )
 
-write_csv(DF, "../results/fig6_citations.csv")
+write_csv(DF, "../results/fig5_citations.csv")
 ```

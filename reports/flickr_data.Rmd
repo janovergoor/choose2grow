@@ -186,7 +186,7 @@ DF <- rbind(
   data.frame(deg=0:100, est=predict(fs[[5]], D_test), model='4', type='line')
 )
 
-write_csv(DF, "../results/fig6_flickr.csv")
+write_csv(DF, "../results/fig5_flickr.csv")
 ```
 
 
