@@ -249,7 +249,37 @@ class MixedLogitModel(LogitModel):
         # compute total log likelihood
         return -1 * np.sum(np.log(probs + util.log_smooth))
 
-    def fit(self, n_rounds=20, etol=0.1, return_stats=False):
+    def individual_likelihood(self):
+        """
+        Returns the total individual likelihood for each data point.
+        LL_i = sum_k pi_k * P_i(j | C_i, theta_k)
+        """
+        K = len(self.models)  # number of classes
+        # compute probabilities for individual examples for every mode
+        probs = {k: self.models[k].individual_likelihood(self.models[k].theta) for k in range(K)}
+        # weigh probabilities by class probabilities
+        probs = {k: self.pk[k] * probs[k] for k in range(K)}
+        # sum different classes
+        # it's late..
+        return [sum(x) for x in [[probs[j][i] for j in range(len(probs))] for i in range(len(probs[0]))]]
+
+    def get_gammas(self):
+        """
+        Helper function to compute the responsibilities of the individual data
+        points.
+        """
+        K = len(self.models)  # number of classes
+        # initate class probabilities if they don't exist
+        if not hasattr(self, 'pk'):
+            self.pk = {k: 1.0 / K for k in range(K)}
+        # compute probabilities for individual examples
+        probs = {k: self.models[k].individual_likelihood(self.models[k].theta) for k in range(K)}
+        # compute numerator (for each individual, the sum of likelihoods)
+        num = [np.sum([self.pk[k] * probs[k][j] for k in range(K)]) for j in range(self.n)]
+        # compute responsibilities by normalizing w total class probability
+        return {k: (self.pk[k] * probs[k]) / num for k in range(K)}
+
+    def fit(self, n_rounds=20, etol=0.1, return_stats=False, pk=None):
         """
         Fit the mixed model using a version of EM.
 
@@ -264,45 +294,53 @@ class MixedLogitModel(LogitModel):
         T = []
         if K < 1:
             self.exception("not enough models specified for mixed model")
-        # initate class probabilities
-        self.pk = {k: 1.0 / K for k in range(K)}
+        if pk is None:
+            # initate class probabilities
+            self.pk = {k: 1.0 / K for k in range(K)}
+        else:
+            if len(pk) != K:
+                self.exception("pk is length %d, should be %d" % (len(pk), K))
+            if sum(pk) != 1:
+                self.exception("pk doesn't sum to 1")
+            self.pk = {k: pk[k] for k in range(K)}
         # store current total log-likelihood
         gamma = {k: [self.pk[k]] * self.n for k in range(K)}
         prev_ll = np.sum([ms[k].ll(w=gamma[k]) for k in range(K)])
         # run EM n_rounds times
         for i in range(n_rounds):
             # 1) Expectation - find class responsibilities given weights
-            # compute probabilities for individual examples
-            probs = {k: ms[k].individual_likelihood(ms[k].theta) for k in range(K)}
-            # compute numerator (for each individual, the sum of likelihoods)
-            num = [np.sum([self.pk[k] * probs[k][j] for k in range(K)]) for j in range(self.n)]
-            # compute responsibilities by normalizing w total class probability
-            gamma = {k: (self.pk[k] * probs[k]) / num for k in range(K)}
+            gamma = self.get_gammas()
             # 2) Maximization - find optimal coefficients given current weights
             for k in range(K):
                 # update average class responsibilities
                 self.pk[k] = np.mean(gamma[k])
                 # actually run the optimizer for current class
-                ms[k].fit(w=gamma[k])
+                w = gamma[k]
+                # (optionally) include Wn adjustment as well
+                # TODO - make parameterized
+                w *= ms[k].individual_likelihood(ms[k].theta) / self.individual_likelihood()
+                ms[k].fit(w=w)
             # compute the total mixture's likelihood
             ll = self.ll()
+            # compute current total likelihood
+            delta = prev_ll - ll
             # gather stats for this round
             stats = [i]
             for k in range(K):
                 stats += [self.pk[k], ms[k].theta[0]]
             stats.append(ll)
+            stats.append(delta)
             T.append(stats)
             # optionally print round info
             if self.vvv and i % 1 == 0:
                 msg = "[%s/%3d]" % ("%3d", n_rounds)
                 for k in range(1, K + 1):
                     msg += " (%s) pi_%d=%s u_%d=%s" % \
-                           (ms[k-1].model_short, k, "%.3f", k, "%.2f")
-                msg += " (*) tot_ll=%.4f"
+                           (ms[k-1].model_short, k, "%.9f", k, "%.9f")
+                msg += " (*) tot_ll=%.10f (*) delta=%.10f"
                 self.message(msg % tuple(stats))
-            # compute current total likelihood
-            delta = prev_ll - ll
             # stop if little difference
+            # TODO - stop if any theta too big
             if self.vvv and delta < etol:
                 self.message("delta in ll (%.3f) < etol (%.3f), stopping" % (delta, etol))
                 break
@@ -523,7 +561,13 @@ class FeatureModel(LogitModel):
         # compute total utility per case
         score_tot = self.D.groupby('choice_id')['score'].aggregate(np.sum)
         # compute probabilities of choices
-        return np.array(self.D.loc[self.D.y == 1, 'score']) / np.array(score_tot)
+        probs = np.array(self.D.loc[self.D.y == 1, 'score']) / np.array(score_tot)
+        # account for score_tot = 0
+        # WARN: this happens if none of the alternatives is a valid choice,
+        #       according to the specificed (reduced) choice set. These cases
+        #       will always have probability 0 for that mode..
+        probs[score_tot == 0] = 0
+        return probs
 
 
     def grad(self, theta=None, w=None):
