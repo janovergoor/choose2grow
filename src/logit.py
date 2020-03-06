@@ -279,7 +279,7 @@ class MixedLogitModel(LogitModel):
         # compute responsibilities by normalizing w total class probability
         return {k: (self.pk[k] * probs[k]) / num for k in range(K)}
 
-    def fit(self, n_rounds=20, etol=0.1, return_stats=False, pk=None):
+    def fit(self, n_rounds=20, etol=0.1, return_stats=False, pk=None, sampled=False):
         """
         Fit the mixed model using a version of EM.
 
@@ -288,6 +288,9 @@ class MixedLogitModel(LogitModel):
         n_rounds -- maximum number of iterations before the process stops
         etol -- minimum delta in total likelihood before the process stops
         return_stats -- return a pandas DataFrame with stats for every round
+        pk -- can be used to manually set a starting class distribution
+        sampled -- flag representing whether the data is negatively sampled,
+          and thus whether Wn adjustment should be used.
         """
         ms = self.models  # shorthand
         K = len(ms)  # number of classes
@@ -317,8 +320,9 @@ class MixedLogitModel(LogitModel):
                 # actually run the optimizer for current class
                 w = gamma[k]
                 # (optionally) include Wn adjustment as well
-                # TODO - make parameterized
-                w *= ms[k].individual_likelihood(ms[k].theta) / self.individual_likelihood()
+                if sampled:
+                    w *= (ms[k].individual_likelihood(ms[k].theta) /
+                          self.individual_likelihood())
                 ms[k].fit(w=w)
             # compute the total mixture's likelihood
             ll = self.ll()

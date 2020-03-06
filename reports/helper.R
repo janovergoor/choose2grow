@@ -117,3 +117,18 @@ censored_log <- Vectorize(function(x, min=NA, max=NA) {
 lrt <- function(ll0, ll1, df=1) {
   pchisq(2*abs(ll1-ll0), df=df, lower.tail=F)
 }
+
+
+
+dropLeadingZero <- function(l){
+  lnew <- c()
+  for(i in l){
+    if(i==0){ #zeros stay zero
+      lnew <- c(lnew,"0")
+    } else if (i>1){ #above one stays the same
+      lnew <- c(lnew, as.character(i))
+    } else
+      lnew <- c(lnew, gsub("(?<![0-9])0+", "", i, perl = TRUE))
+  }
+  as.character(lnew)
+}
