@@ -12,7 +12,7 @@ from util import *
 
       "%s-%.2f-%.2f-%s-%.02d.csv" % ({d,g}, r, p, {u,d}, id)
 
-  output: ../data/synth_graphs
+  output: ../../data/synth_graphs
 
 """
 
@@ -133,18 +133,6 @@ def make_rp_graph(id, G_in=None, n_max=10000, r=0.5, p=0.5, grow=True, m=1, dire
     return (G, T)
 
 
-def write_edge_list(T, fn):
-    """
-    Write a time-stamped edge list to a csv file.
-    Output format is: ['t', 'from', 'to']
-    """
-    with open(fn, 'w') as f:
-        writer = csv.writer(f)
-        writer.writerow(['t', 'from', 'to'])
-        for (t, i, j) in T:
-            writer.writerow([t, i, j])
-
-
 def pass_through(graph):
     """
     Make a graph according to the specs in the id string and write it out.
@@ -162,7 +150,9 @@ def pass_through(graph):
     write_edge_list(el, fn)
 
 
-if __name__ == '__main__':
+def run_generate():
+    print("work!")
+    exit()
     n = 10
     todo = []
     for type1 in ['g', 'd']:
@@ -175,4 +165,4 @@ if __name__ == '__main__':
     print("TODO: %d" % len(todo))
     # Run cycles in parallel
     with Pool(processes=10) as pool:
-        r = pool.map(pass_through, todo)
+        pool.map(pass_through, todo)

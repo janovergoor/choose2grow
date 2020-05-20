@@ -1,18 +1,21 @@
-# Run with `Rscript make_plots.R`
+# Run with `Rscript paper1/make_plots.R`
 
-source('../reports/helper.R')
-
+source('helper.R')
+data_folder = '../data/paper1_plot_data/'
+figures_folder = '../figures/paper1/'
 
 ##
 ## Figure 1 - Likelihood surface
 ##
 
-DF <- read_csv("../results/fig1_data.csv", col_types='ddd') %>%
+DF <- sprintf("%s/%s", data_folder, "fig_1_data.csv") %>%
+  read_csv(col_types='ddd') %>%
   # weird but monotomic transformation of ll to get the colors right
   mutate(ll=exp((ll+55000)/1000)) %>%
   select(x=alpha, y=p, z=ll)
 
-em <- read_csv("../results/fig1_data_em.csv", col_types='iddddd') %>%
+em <- sprintf("%s/%s", data_folder, "fig_1_data_em.csv") %>%
+  read_csv(col_types='iddddd') %>%
   mutate(x=u2, y=p1)
 
 p <- ggplot(DF, aes(x, y)) +
@@ -28,8 +31,7 @@ p <- ggplot(DF, aes(x, y)) +
        my_theme() +
        theme(legend.position='none', axis.line=element_blank())
 
-ggsave('../results/fig_1.pdf', p, width=4.5, height=2.5)
-
+ggsave(sprintf("%s/%s", figures_folder, "fig_1.pdf"), p, width=4.5, height=2.5)
 
 
 ##
@@ -48,9 +50,11 @@ DF <- DF %>%
   left_join(DF %>% group_by(deg) %>% summarize(w=1/n()), by='deg')
 
 # read log-degree logit fit
-fit1 <- read_csv("../results/fig2_data.csv", col_types='cdd') %>% filter(deg == 'alpha')
+
+DFf <- sprintf("%s/%s", data_folder, "fig_2_data.csv") %>% read_csv(col_types='cdd')
+fit1 <- DFf %>% filter(deg == 'alpha')
 # read non-parametric degree log fit
-DFnp <- read_csv("../results/fig2_data.csv", col_types='cdd') %>% filter(deg != 'alpha') %>%
+DFnp <- DFf %>% filter(deg != 'alpha') %>%
   filter(coef<20) %>%
   mutate(deg=as.numeric(deg), stat=exp(coef), w=1/se)
 # normalize by coefficient for degree 1
@@ -100,7 +104,7 @@ p <- ggplot(DF, aes(deg, stat, color=label)) +
                             linetype=c("blank", "blank", "solid", "solid"), shape=c(16, 16, NA, NA)))) +
        my_theme()
 
-ggsave('../results/fig_2.pdf', p, width=4.5, height=2.5)
+ggsave(sprintf("%s/%s", figures_folder, "fig_2.pdf"), p, width=4.5, height=2.5)
 
 
 
@@ -108,7 +112,8 @@ ggsave('../results/fig_2.pdf', p, width=4.5, height=2.5)
 ## Figure 3 - Power law fits on degree of (r,p) graphs
 ##
 
-DF <- read_csv("../results/fig3_data.csv", col_types='cccccd') %>%
+DF <- sprintf("%s/%s", data_folder, "fig_3_data.csv") %>%
+  read_csv(col_types='cccccd') %>%
   group_by(type, r, p, type2) %>%
   summarize(mean_a=mean(alpha)) %>%
   ungroup() %>%
@@ -131,7 +136,7 @@ p <- ggplot(DF, aes(x=r, y=mean_a, color=p)) +
        my_theme() +
        theme(legend.title=element_text(hjust=0.5))
 
-ggsave('../results/fig_3.pdf', p, width=4.5, height=2.5)
+ggsave(sprintf("%s/%s", figures_folder, "fig_3.pdf"), p, width=4.5, height=2.5)
 
 
 
@@ -139,7 +144,8 @@ ggsave('../results/fig_3.pdf', p, width=4.5, height=2.5)
 ## Figure 4 - Log-likelihood of misspecified models
 ##
 
-DF <- read_csv("../results/fig4_data.csv", col_types='ccdd') %>%
+DF <- sprintf("%s/%s", data_folder, "fig_4_data.csv") %>%
+  read_csv(col_types='ccdd') %>%
   mutate(Model=ifelse(model=='p', 'Copy\nmodel', ifelse(model=='r', 'Local\nsearch', '2d')))
 
 DF_max <- DF %>% group_by(data, Model) %>% filter(ll==max(ll))
@@ -169,7 +175,7 @@ p2 <- DF %>% filter(data=='r=1.00, p=0.50') %>%
           my_theme() +
           theme(legend.position=c(0.85, 0.85), axis.title.y=element_blank(), axis.text.y=element_blank())
 
-pdf('../results/fig_4.pdf', width=6, height=3)
+pdf(sprintf("%s/%s", figures_folder, "fig_4.pdf"), width=6, height=3)
 lay <- rbind(c(rep(1, 10), rep(2, 9)),
              c(rep(1, 10), rep(2, 9)))
 grid.arrange(p1, p2, layout_matrix=lay)
@@ -182,9 +188,11 @@ dev.off()
 ##
 
 DF <- rbind(
-    read_csv("~/projects/choosing_to_grow/choose2grow/results/fig5_flickr.csv", col_types='ddcc') %>%
+    sprintf("%s/%s", data_folder, "fig_5_flickr.csv") %>%
+      read_csv(col_types='ddcc') %>%
       mutate(Model=paste0('3.', model), data='Flickr'),
-    read_csv("~/projects/choosing_to_grow/choose2grow/results/fig5_citations.csv", col_types='ddcc') %>%
+    sprintf("%s/%s", data_folder, "fig_5_citations.csv") %>%
+      read_csv(col_types='ddcc') %>%
       mutate(Model=paste0('4.', model), data='Citations')
   )  %>%
   filter(!(type=='line' & deg==0)) %>%
@@ -224,7 +232,7 @@ p2 <- DF %>% filter(type=='point', data=='Citations') %>%
     my_theme() +
     theme(legend.position=c(0.89, 0.13), axis.title.y=element_blank(), axis.text.y=element_blank())
 
-pdf('../results/fig_5.pdf', width=6, height=3)
+pdf(sprintf("%s/%s", figures_folder, "fig_5.pdf"), width=6, height=3)
 lay <- rbind(c(rep(1, 10), rep(2, 9)),
              c(rep(1, 10), rep(2, 9)))
 grid.arrange(p1, p2, layout_matrix=lay)

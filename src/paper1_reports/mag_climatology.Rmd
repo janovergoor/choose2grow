@@ -1,5 +1,5 @@
 ---
-title: "MAG - 'Computer networks'"
+title: "MAG - 'Climatology'"
 author: "Jan Overgoor"
 params:
   date: "Sys.Date()"
@@ -15,7 +15,7 @@ output:
 
 ```
 to build from command-line, run with:
-R -e "rmarkdown::render('mag_networks.Rmd', output_file='mag_networks.pdf')"
+R -e "rmarkdown::render('mag_climatology.Rmd', output_file='mag_climatology.pdf')"
 ```
 
 ```{r setup, include=F}
@@ -27,7 +27,7 @@ mutate <- dplyr::mutate
 ```
 
 ```{r data}
-d_raw <- read_csv("~/choosing_to_grow/data_academic/processed/mag_net.txt", col_types='cccddccc')
+d_raw <- read_csv("../data/mag_cli.txt", col_types='cccddccc')
 # explode citations into edges
 edges <- d_raw %>%
   separate_rows(references, sep=',') %>%
@@ -335,16 +335,16 @@ H_test  <- X %>%
   mlogit.data(chid.var='choice_id', choice="y", alt.var='alt_id')
 
 # store the data
-write_csv(H_train, "../results/mag_net_H_train.csv")
-write_csv(H_test, "../results/mag_net_H_test.csv")
+write_csv(H_train, "../results/mag_cli_H_train.csv")
+write_csv(H_test, "../results/mag_cli_H_test.csv")
 ```
 
 ```{r data_reload}
-H_train <- read.csv("../results/mag_net_H_train.csv") %>%
+H_train <- read.csv("../results/mag_cli_H_train.csv") %>%
   mutate(max_n_papers=ifelse(is.na(max_n_papers), 0, max_n_papers)) %>%
   mutate(has_deg=ifelse(n_citations > 0, 1, 0)) %>%
   mlogit.data(chid.var='choice_id', choice="y", alt.var='alt_id')
-H_test  <- read.csv("../results/mag_net_H_test.csv") %>%
+H_test  <- read.csv("../results/mag_cli_H_test.csv") %>%
   mutate(max_n_papers=ifelse(is.na(max_n_papers), 0, max_n_papers)) %>%
   mutate(has_deg=ifelse(n_citations > 0, 1, 0)) %>%
   mlogit.data(chid.var='choice_id', choice="y", alt.var='alt_id')
@@ -375,4 +375,32 @@ print(paste("Train accuracy  &  ",
     lapply(fs, function(x) acc(x, H_train)) %>% unlist() %>% round(3) %>% paste(collapse=' & '), ' \\'))
 print(paste("Test accuracy   &  ",
     lapply(fs, function(x) acc(x, H_test)) %>% unlist() %>% round(3) %>% paste(collapse=' & '), ' \\'))
+```
+
+```{r np_write}
+H_train <- read.csv("../results/mag_cli_H_train.csv") %>%
+  mutate(max_n_papers=ifelse(is.na(max_n_papers), 0, max_n_papers)) %>%
+  mutate(n_citations_f = ifelse(n_citations > 100, 101, n_citations)) %>%
+  group_by(choice_id) %>% filter(sum(ifelse(y, 1, 0)) == 1) %>% ungroup() %>%
+  mlogit.data(chid.var='choice_id', choice="y", alt.var='alt_id')
+
+f1 <- mlogit(y ~ as.factor(n_citations_f) | 0, H_train)
+f3 <- mlogit(y ~ as.factor(n_citations_f) + has_same_author + log(delta_years) | 0, H_train)
+
+D_test <- rbind(
+    data.frame(choice_id=1, alt_id=0, y=0, n_citations=0, has_deg=0, has_same_author=0, delta_years=1),
+    data.frame(choice_id=1, alt_id=1:100, y=0, n_citations=1:100, has_deg=1, has_same_author=0, delta_years=1)
+  )%>%
+  mlogit.data(chid.var='choice_id', choice="y", alt.var='alt_id')
+
+DF <- rbind(
+  data.frame(deg=0    , est=1/sum(exp(coef(f1)[1:100])), model='1', type='point'),
+  data.frame(deg=1:100, est=exp(coef(f1)[1:100])/sum(exp(coef(f1)[1:100])), model='1', type='point'),
+  data.frame(deg=0:100, est=predict(fs[[1]], D_test), model='1', type='line'),
+  data.frame(deg=0    , est=1/sum(exp(coef(f3)[1:100])), model='3', type='point'),
+  data.frame(deg=1:100, est=exp(coef(f3)[1:100])/sum(exp(coef(f3)[1:100])), model='3', type='point'),
+  data.frame(deg=0:100, est=predict(fs[[3]], D_test), model='3', type='line')
+)
+
+write_csv(DF, "../results/fig_5_citations.csv")
 ```

@@ -1,7 +1,6 @@
 import json
 import csv
 import os
-import util
 
 """
 
@@ -24,6 +23,7 @@ import util
 """
 
 path_in = '~/mag_raw'
+data_path = '../../data'
 
 # dictionary of topics (and keywords)
 topics = {
@@ -39,7 +39,7 @@ topics = {
 
 # create file handles
 for k, v in topics.items():
-    f_out = open('%s/mag_%s.txt' % (util.data_path, k), 'w')
+    f_out = open('%s/mag_%s.txt' % (data_path, k), 'w')
     writer = csv.writer(f_out, dialect='unix', quoting=csv.QUOTE_NONNUMERIC)
     topics[k]['file'] = f_out
     topics[k]['writer'] = writer

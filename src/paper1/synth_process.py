@@ -1,3 +1,5 @@
+import os
+import csv
 import networkx as nx
 from collections import Counter
 from multiprocessing import Pool
@@ -176,10 +178,12 @@ def process_all_edges(graph, n_alt=10, vvv=0):
         print("[%s] did sampled choices" % graph)
 
 
-if __name__ == '__main__':
+def run_process():
+    print("Work!")
+    exit()
     graphs = os.listdir(data_path + '/synth_graphs')
     choices = os.listdir(data_path + "/choices")  # already done
     graphs = [x for x in graphs if x not in choices and x != '.DS_Store']
     print("TODO: %d" % len(graphs))
     with Pool(processes=10) as pool:
-        r = pool.map(process_all_edges, graphs)
+        pool.map(process_all_edges, graphs)

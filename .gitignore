@@ -6,6 +6,7 @@
 *_files*
 *_cache*
 *.gz
-*_old
+*_old*
 env*
 .ipynb_checkpoints
+misc*
