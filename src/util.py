@@ -16,7 +16,7 @@ from scipy.optimize import approx_fprime
 # path to data files
 data_path = '../data'
 # amount to smooth log(0) with
-log_smooth = 1e-8
+log_smooth = 1e-20
 
 
 #
@@ -119,7 +119,7 @@ def read_edge_list(fn, vvv=0):
     return el
 
 
-def read_data(fn, max_deg=50, vvv=0):
+def read_data(fn, vvv=0):
     """
     Read individual data for either a single graph's choice sets,
     or all graphs with the specified parameters.
@@ -133,7 +133,7 @@ def read_data(fn, max_deg=50, vvv=0):
         fns = [os.path.basename(x) for x in glob(pattern)]
         for x in fns:
             path = '%s/%s/%s' % (data_path, 'choices', x)
-            D = read_data_single(path, max_deg)
+            D = read_data_single(path)
             # update choice ids so they dont overlap
             fid = x.split('.csv')[0].split('-')[-1]
             ids = [('%09d' + fid) % x for x in D.choice_id]
@@ -144,24 +144,20 @@ def read_data(fn, max_deg=50, vvv=0):
     else:
         # read one
         path = '%s/%s/%s' % (data_path, 'choices', fn)
-        D = read_data_single(path, max_deg)
+        D = read_data_single(path)
     # cut off at max observed degree
     if vvv:
         print("[%s] read (%d x %d)" % (fn, D.shape[0], D.shape[1]))
     return D
 
 
-def read_data_single(path, max_deg=50):
+def read_data_single(path):
     """
     Read individual data for a single graph.
-    Degrees are cut-off at max_deg.
     """
     # read the choices
     D = pd.read_csv(path)
-    if max_deg is not None:
-        # remove too high degree choices
-        D = D[D.deg <= max_deg]
-    # remove cases without any choice (choice was higher than max_deg)
+    # remove cases without any choice
     D = D[D.groupby('choice_id')['y'].transform(np.sum) == 1]
     # read the choices
     return D
