@@ -1,8 +1,8 @@
-import networkx as nx
-import pandas as pd
-from util import *
+import os
 import csv
 import random
+import pandas as pd
+import networkx as nx
 from datetime import datetime
 
 """
@@ -17,6 +17,8 @@ from datetime import datetime
   output: ../data/flickr-growth_choices.csv
 
 """
+
+data_path = '../../data'
 
 # date to start sampling from
 start_date = ['2006-11-05', '2007-03-01'][0]

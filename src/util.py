@@ -1,8 +1,8 @@
 import csv
-import numpy as np
 import os
-import pandas as pd
 import random
+import pandas as pd
+import numpy as np
 from glob import glob
 from scipy.optimize import approx_fprime
 
@@ -92,7 +92,6 @@ def manual_ll(D, alpha=1, p=0.5):
 #  Data reading functions
 #
 
-
 def read_edge_list(fn, vvv=0):
     """
     Read a time-steamped edge list from a csv file.
@@ -117,6 +116,18 @@ def read_edge_list(fn, vvv=0):
     if vvv > 0:
         print("[%s] read %d edges" % (fn, len(el)))
     return el
+
+
+def write_edge_list(T, fn):
+    """
+    Write a time-stamped edge list to a csv file.
+    Output format is: ['t', 'from', 'to']
+    """
+    with open(fn, 'w') as f:
+        writer = csv.writer(f)
+        writer.writerow(['t', 'from', 'to'])
+        for (t, i, j) in T:
+            writer.writerow([t, i, j])
 
 
 def read_data(fn, vvv=0):

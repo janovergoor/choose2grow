@@ -22,7 +22,7 @@ mutate = dplyr::mutate
 Read data
 
 ```{r}
-d <- read_tsv("~/projects/choosing_to_grow/choose2grow/data/flickr-growth.txt.gz",
+d <- read_tsv("../data/flickr-growth.txt.gz",
               col_names=c('from','to','ds'), col_types='iiD')
 
 nodes <- full_join(
@@ -85,7 +85,7 @@ r = rstar/(1+rstar)
 
 ```{r read_data1}
 ds = '061105'
-fn <- sprintf("~/projects/choosing_to_grow/choose2grow/data/flickr-growth_choices_%s.csv", ds)
+fn <- sprintf("../data/flickr-growth_choices_%s.csv", ds)
 DM <- read_csv(fn, col_types='iiiiii') %>%
   mutate(
     has_deg=ifelse(deg > 0, 1, 0),
@@ -121,7 +121,7 @@ H_train2 <- H_train %>%
 H_train %>%
   mutate(y=ifelse(y, 1, 0)) %>%
   select(choice_id,y,deg,fof=is_fof) %>%
-  write_csv("~/projects/choosing_to_grow/choose2grow/data/flickr-growth_choices_py.csv")
+  write_csv("../data/flickr-growth_choices_py.csv")
 ```
 
 ```{r model_models1}
@@ -186,7 +186,7 @@ DF <- rbind(
   data.frame(deg=0:100, est=predict(fs[[5]], D_test), model='4', type='line')
 )
 
-write_csv(DF, "../results/fig5_flickr.csv")
+write_csv(DF, "../results/fig_5_flickr.csv")
 ```
 
 
@@ -195,7 +195,7 @@ write_csv(DF, "../results/fig5_flickr.csv")
 
 ```{r read_data2}
 ds = '070301'
-fn <- sprintf("~/projects/choosing_to_grow/choose2grow/data/flickr-growth_choices_%s.csv", ds)
+fn <- sprintf("../data/flickr-growth_choices_%s.csv", ds)
 DM <- read_csv(fn, col_types='iiiiii') %>%
   mutate(
     has_deg=ifelse(deg > 0, 1, 0),
