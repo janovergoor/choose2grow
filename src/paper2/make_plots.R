@@ -24,12 +24,12 @@ p2 <- sprintf("%s/%s", data_folder, "fig_2_data.csv") %>%
         scale_y_log10("Number of samples (s)", expand=c(0,0), labels=trans_format('log10', math_format(10^.x))) +
         coord_cartesian(xlim=c(30, 100000), ylim=c(3, 1000)) +
         scale_fill_gradientn(name="Runtime\n (sec)", colours=rev(heat.colors(10)),
-                             breaks=log(c(10^-1, 10^1, 10^3)),
-                             labels=c(bquote(10^-1),bquote(10^1),bquote(10^3))) +
+                             breaks=log(c(10^1, 10^3)),
+                             labels=c(expression(10^1), expression(10^3))) +
         my_theme() +
         theme(legend.title=element_text())
 
-ggsave(sprintf("%s/%s", figures_folder, "fig_2.pdf"), p2, width=5, height=3)
+ggsave(sprintf("%s/%s", figures_folder, "fig_2.pdf"), p2, width=5, height=3, dpi=500)
 
 
 
